@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Podscript MVP</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <h1>Podscript MVP</h1>
+      <p>查看 API 文档：<a href="/docs" target="_blank">/docs</a></p>
+
+      <!-- Step 1: Download from YouTube -->
+      <section class="card">
+        <h3>第一步：下载音频</h3>
+        <label for="url">输入 YouTube 链接</label>
+        <div class="row">
+          <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=..." />
+          <button id="downloadBtn">开始下载</button>
+        </div>
+        <div id="downloadError" class="error" hidden></div>
+      </section>
+
+      <!-- Status display -->
+      <section class="card">
+        <div class="status">
+          <div>任务ID：<span id="taskId">-</span></div>
+          <div>状态：<span id="status">-</span></div>
+        </div>
+        <div class="progress">
+          <div id="progressBar" class="bar"></div>
+        </div>
+      </section>
+
+      <!-- Step 2: Transcription -->
+      <section class="card">
+        <h3>第二步：开始转写</h3>
+
+        <!-- File upload -->
+        <div class="row" style="margin-bottom:12px; align-items: center;">
+          <input id="file" type="file" accept="audio/*,video/*" />
+          <small>或上传本地音/视频文件</small>
+        </div>
+
+        <!-- ASR Provider Selection -->
+        <div class="option-group">
+          <label>转写引擎：</label>
+          <div class="radio-group">
+            <label class="radio-label">
+              <input type="radio" name="provider" value="whisper" checked />
+              <span>Whisper 离线</span>
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="provider" value="tingwu" />
+              <span>阿里云通义听悟</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Whisper Model Selection -->
+        <div id="whisperOptions" class="option-group">
+          <label>Whisper 模型：</label>
+          <div class="model-select-row">
+            <select id="whisperModel">
+              <option value="tiny">tiny (39M, ~1GB VRAM, 最快)</option>
+              <option value="base" selected>base (74M, ~1GB VRAM, 推荐)</option>
+              <option value="small">small (244M, ~2GB VRAM)</option>
+              <option value="medium">medium (769M, ~5GB VRAM)</option>
+              <option value="large">large (1550M, ~10GB VRAM, 最准)</option>
+              <option value="turbo">turbo (809M, ~6GB VRAM, 快+准)</option>
+            </select>
+            <button id="downloadModelBtn" class="btn-secondary">下载模型</button>
+          </div>
+          <small id="modelStatus" class="model-status"></small>
+        </div>
+
+        <!-- Tingwu Options (hidden by default) -->
+        <div id="tingwuOptions" class="option-group" hidden>
+          <small class="tingwu-note">需要配置阿里云 AccessKey 和通义听悟 AppKey</small>
+        </div>
+
+        <!-- Transcribe Button -->
+        <div id="transcribeSection">
+          <button id="transcribeBtn" class="transcribe-btn" disabled>开始转写</button>
+          <p id="transcribeHint" class="hint">请先下载音频或上传本地文件</p>
+        </div>
+        <div id="transcribeError" class="error" hidden></div>
+
+        <!-- Transcription Progress -->
+        <div id="transcribeProgress" class="transcribe-progress" hidden>
+          <div class="progress-header">
+            <span>转写进度</span>
+            <span id="transcribeStatus">准备中...</span>
+          </div>
+          <div class="progress">
+            <div id="transcribeProgressBar" class="bar"></div>
+          </div>
+          <div id="logViewer" class="log-viewer">
+            <div id="logContent"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Results -->
+      <section class="card">
+        <h2>转写结果</h2>
+        <div id="result" class="result">尚未生成</div>
+        <div id="links" class="links" hidden>
+          <a id="srtLink" href="#" target="_blank">下载 SRT</a>
+          <a id="mdLink" href="#" target="_blank">下载 Markdown</a>
+        </div>
+      </section>
+    </main>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
