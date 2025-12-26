@@ -7,6 +7,8 @@
 - **下载与转写分离**：音频下载和语音转写为独立步骤，支持灵活组合
 - **双转写引擎**：支持 Whisper 离线转写和阿里云通义听悟在线转写
 - **多模型选择**：Whisper 提供 6 种模型，按需选择速度与精度
+- **自定义 Prompt**：支持输入提示词优化转写效果或进行后处理
+- **说话人分离**：通义听悟支持自动识别不同发言人
 - **实时进度**：转写过程实时显示进度和日志
 
 ## 快速开始
@@ -79,6 +81,79 @@ pip install openai-whisper
 3. 创建 OSS Bucket 用于临时存储音频
 4. 在 `.env` 中配置（见下方配置章节）
 
+## 自定义 Prompt
+
+两种转写引擎都支持自定义 Prompt，但用途不同：
+
+### Whisper Prompt（initial_prompt）
+
+用于**引导转写过程**，提高特定词汇的识别率。
+
+**适用场景：**
+- 专业术语识别（技术、医学、法律等领域）
+- 人名、地名、品牌名等专有名词
+- 指定对话风格或格式
+
+**示例：**
+```
+术语：Kubernetes, Docker, CI/CD, DevOps
+```
+```
+这是一个关于人工智能的播客，主持人是张三，嘉宾是李四
+```
+```
+专有名词：GPT-4, Claude, LLaMA, Transformer
+```
+
+**限制：** 最多约 224 个 token（约 900 个字符）
+
+### 通义听悟 Prompt（CustomPrompt）
+
+用于**大模型后处理**，对转写结果进行二次加工。
+
+**适用场景：**
+- 生成不同粒度的摘要
+- 提取关键信息或待办事项
+- 自定义格式化输出
+- 内容分析与评估
+
+**示例：**
+```
+请为这段对话生成一个 100 字以内的摘要
+```
+```
+提取对话中提到的所有数字和日期
+```
+```
+列出对话中讨论的主要观点，以列表形式输出
+```
+
+### 输出格式
+
+**通义听悟（带说话人分离）：**
+```markdown
+# 转写结果
+
+发言人1  00:16
+你觉得站在2025年的尾巴上，你有嗅到泡沫的味道没有？
+
+发言人2  00:22
+人类历史上每次技术革命都带来了泡沫...
+```
+
+**Whisper（无说话人分离）：**
+```markdown
+# 转写结果
+
+00:00
+At the beginning of my day.
+
+00:05
+I literally just write today.
+```
+
+> **注意**：Whisper 本身不支持说话人分离，如需此功能请使用通义听悟。
+
 ## 使用方式
 
 ### Web UI（推荐）
@@ -90,6 +165,7 @@ pip install openai-whisper
 3. **第二步：开始转写**
    - 选择转写引擎（Whisper 离线 / 通义听悟）
    - 选择 Whisper 模型（如使用 Whisper）
+   - （可选）输入自定义 Prompt 优化转写效果
    - 点击"开始转写"
 4. 查看实时进度和日志
 5. 完成后下载 SRT 或 Markdown 结果
@@ -113,6 +189,10 @@ curl http://localhost:8001/tasks/abc123
 curl -X POST "http://localhost:8001/tasks/abc123/transcribe?provider=whisper&model_name=base"
 # 返回：{"status": "transcribing", ...}
 
+# 使用自定义 Prompt 启动转写
+curl -X POST "http://localhost:8001/tasks/abc123/transcribe?provider=whisper&model_name=base&prompt=术语：Kubernetes,Docker,CI/CD"
+# 返回：{"status": "transcribing", ...}
+
 # 等待转写完成
 curl http://localhost:8001/tasks/abc123
 # 返回：{"status": "completed", ...}
@@ -131,6 +211,12 @@ curl -X POST -F "file=@audio.mp3" http://localhost:8001/tasks/upload
 
 # 启动转写
 curl -X POST "http://localhost:8001/tasks/def456/transcribe?provider=whisper&model_name=turbo"
+
+# 使用通义听悟（带说话人分离）
+curl -X POST "http://localhost:8001/tasks/def456/transcribe?provider=tingwu"
+
+# 通义听悟 + 自定义 Prompt（LLM 后处理）
+curl -X POST "http://localhost:8001/tasks/def456/transcribe?provider=tingwu&prompt=请生成会议摘要"
 ```
 
 **查询转写引擎和模型：**
@@ -288,13 +374,23 @@ PYTHONPATH=./src uvicorn ...
 - 确认 `STORAGE_REGION` 与 Bucket 所在区域一致
 - 系统时间需与网络时间同步
 
+## 部署指南
+
+- **[阿里云服务配置指南](docs/aliyun-setup.md)** - 从零配置 OSS 和通义听悟，含故障排除
+- **[GitHub Actions 部署](docs/deploy-github-actions.md)** - CI/CD 流水线配置
+- **[Railway 部署](docs/deploy-railway.md)** - 一键部署到 Railway 云平台
+
 ## 相关链接
 
+**Whisper**
 - [OpenAI Whisper](https://github.com/openai/whisper)
+
+**阿里云**
 - [阿里云通义听悟](https://help.aliyun.com/zh/tingwu/)
-- [阿里巴巴 SDK 中心-听悟](https://api.aliyun.com/api-tools/sdk/tingwu?version=2023-09-30&language=python-tea&tab=primer-doc)    
-- [听悟 OpenAPI-文档](https://next.api.aliyun.com/api/tingwu/2023-09-30/GetTaskInfo?lang=PYTHON)
-- 听悟[官方文档](https://help.aliyun.com/zh/tingwu/getting-started-1?spm=a2c4g.11174283.0.0.7e93607e4uJv0r)，尤其是开通tingwi_app_key
-- [tingwu-20230930 Github-地址](https://github.com/aliyun/alibabacloud-python-sdk/tree/master/tingwu-20230930)
-- [阿里云 RAM 用户创建](https://help.aliyun.com/zh/ram/user-guide/create-an-accesskey-pair)
+- [听悟开通指南](https://help.aliyun.com/zh/tingwu/getting-started-1) - 获取 TINGWU_APP_KEY
+- [听悟 OpenAPI 文档](https://next.api.aliyun.com/api/tingwu/2023-09-30/GetTaskInfo?lang=PYTHON)
+- [tingwu SDK](https://github.com/aliyun/alibabacloud-python-sdk/tree/master/tingwu-20230930)
+- [RAM 用户创建](https://help.aliyun.com/zh/ram/user-guide/create-an-accesskey-pair)
+
+**工具**
 - [yt-dlp 文档](https://github.com/yt-dlp/yt-dlp)

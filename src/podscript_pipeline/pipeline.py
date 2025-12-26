@@ -31,6 +31,7 @@ def run_transcribe_only(
     provider: str = ASR_PROVIDER_WHISPER,
     model_name: str = None,
     language: str = None,
+    prompt: str = None,
     log_callback=None,
 ) -> Dict[str, Any]:
     """
@@ -44,6 +45,9 @@ def run_transcribe_only(
         provider: ASR provider ('whisper' or 'tingwu')
         model_name: Model name (for Whisper)
         language: Language code (e.g., 'zh', 'en') or None for auto-detect
+        prompt: Custom prompt for transcription:
+            - Whisper: initial_prompt for vocabulary/style (max ~900 chars)
+            - Tingwu: custom prompt for LLM post-processing
         log_callback: Optional callback for progress logging
 
     Returns:
@@ -70,6 +74,7 @@ def run_transcribe_only(
         provider=provider,
         model_name=model_name,
         language=language,
+        prompt=prompt,
         log_callback=log_callback,
     )
     log(f"ASR complete, segments={len(transcript.get('segments', []))}")

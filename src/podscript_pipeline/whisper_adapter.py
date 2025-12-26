@@ -96,6 +96,7 @@ def transcribe_audio(
     model_name: str = DEFAULT_MODEL,
     language: Optional[str] = None,
     task: str = "transcribe",
+    initial_prompt: Optional[str] = None,
     log_callback: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
     """
@@ -106,6 +107,12 @@ def transcribe_audio(
         model_name: Whisper model to use
         language: Language code (e.g., 'zh', 'en') or None for auto-detect
         task: 'transcribe' or 'translate' (translate to English)
+        initial_prompt: Optional prompt to guide transcription style or vocabulary.
+            Useful for:
+            - Technical terms: "术语：Kubernetes, Docker, CI/CD"
+            - Speaker marking: "对话有两位发言人"
+            - Style guidance: "这是一个播客访谈节目"
+            Max ~224 tokens (~900 characters).
         log_callback: Optional callback for progress logging
 
     Returns:
@@ -136,6 +143,9 @@ def transcribe_audio(
     }
     if language:
         options["language"] = language
+    if initial_prompt:
+        options["initial_prompt"] = initial_prompt
+        log(f"Using initial prompt: {initial_prompt[:50]}...")
 
     result = model.transcribe(str(audio_path), **options)
 

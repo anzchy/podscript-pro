@@ -24,6 +24,8 @@ const els = {
   whisperModel: document.getElementById('whisperModel'),
   downloadModelBtn: document.getElementById('downloadModelBtn'),
   modelStatus: document.getElementById('modelStatus'),
+  // Custom prompt
+  customPrompt: document.getElementById('customPrompt'),
 }
 
 let currentTaskId = null
@@ -118,10 +120,13 @@ async function uploadTask(file) {
   return res.json()
 }
 
-async function startTranscribe(taskId, provider, modelName) {
+async function startTranscribe(taskId, provider, modelName, prompt) {
   const params = new URLSearchParams({ provider })
   if (modelName && provider === 'whisper') {
     params.append('model_name', modelName)
+  }
+  if (prompt && prompt.trim()) {
+    params.append('prompt', prompt.trim())
   }
   const res = await fetch(`/tasks/${taskId}/transcribe?${params.toString()}`, { method: 'POST' })
   if (!res.ok) {
@@ -284,6 +289,7 @@ async function transcribe() {
 
   const provider = getSelectedProvider()
   const modelName = provider === 'whisper' ? els.whisperModel.value : null
+  const prompt = els.customPrompt ? els.customPrompt.value : ''
 
   els.transcribeBtn.disabled = true
   els.transcribeHint.textContent = '转写进行中...'
@@ -295,7 +301,7 @@ async function transcribe() {
   setTranscribeProgress(0.5)
 
   try {
-    await startTranscribe(currentTaskId, provider, modelName)
+    await startTranscribe(currentTaskId, provider, modelName, prompt)
     pollTranscription()
   } catch (e) {
     setTranscribeError(String(e.message || e))

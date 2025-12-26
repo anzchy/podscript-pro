@@ -91,6 +91,7 @@ def transcribe(
     provider: str = ASR_PROVIDER_WHISPER,
     model_name: Optional[str] = None,
     language: Optional[str] = None,
+    prompt: Optional[str] = None,
     log_callback: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
     """
@@ -102,6 +103,9 @@ def transcribe(
         provider: ASR provider ('tingwu' or 'whisper')
         model_name: Model name (for Whisper: tiny, base, small, medium, large, turbo)
         language: Language code (e.g., 'zh', 'en') or None for auto-detect
+        prompt: Optional prompt to guide transcription:
+            - Whisper: initial_prompt for vocabulary/style hints (~900 chars max)
+            - Tingwu: custom prompt for LLM post-processing
         log_callback: Optional callback for progress logging
 
     Returns:
@@ -113,14 +117,16 @@ def transcribe(
             log_callback(msg)
 
     log(f"transcribe() called with provider={provider}, model={model_name}, path={input_path}")
+    if prompt:
+        log(f"Using custom prompt: {prompt[:50]}...")
 
     if provider == ASR_PROVIDER_WHISPER:
-        return _transcribe_with_whisper(task_id, input_path, model_name, language, log_callback)
+        return _transcribe_with_whisper(task_id, input_path, model_name, language, prompt, log_callback)
     elif provider == ASR_PROVIDER_TINGWU:
-        return _transcribe_with_tingwu(task_id, input_path, log_callback)
+        return _transcribe_with_tingwu(task_id, input_path, prompt, log_callback)
     else:
         log(f"Unknown provider: {provider}, falling back to Whisper")
-        return _transcribe_with_whisper(task_id, input_path, model_name, language, log_callback)
+        return _transcribe_with_whisper(task_id, input_path, model_name, language, prompt, log_callback)
 
 
 def _transcribe_with_whisper(
@@ -128,6 +134,7 @@ def _transcribe_with_whisper(
     input_path: Path,
     model_name: Optional[str],
     language: Optional[str],
+    prompt: Optional[str],
     log_callback: Optional[Callable[[str], None]],
 ) -> Dict[str, Any]:
     """Transcribe using OpenAI Whisper."""
@@ -150,6 +157,7 @@ def _transcribe_with_whisper(
             audio_path=input_path,
             model_name=model_name,
             language=language,
+            initial_prompt=prompt,
             log_callback=log_callback,
         )
         return result
@@ -161,6 +169,7 @@ def _transcribe_with_whisper(
 def _transcribe_with_tingwu(
     task_id: str,
     input_path: Path,
+    prompt: Optional[str],
     log_callback: Optional[Callable[[str], None]],
 ) -> Dict[str, Any]:
     """Transcribe using Alibaba Cloud Tingwu."""
@@ -194,7 +203,7 @@ def _transcribe_with_tingwu(
         log(f"Audio uploaded successfully")
 
         log("Submitting transcribe job to Tingwu...")
-        job_id = submit_transcribe_job(cfg, audio_url)
+        job_id = submit_transcribe_job(cfg, audio_url, custom_prompt=prompt)
         log(f"Job submitted: {job_id}")
 
         log("Polling for transcription result...")

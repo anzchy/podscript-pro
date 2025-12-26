@@ -163,8 +163,16 @@ async def transcribe_task(
     provider: str = Query(default=ASR_PROVIDER_WHISPER, description="ASR provider: 'whisper' or 'tingwu'"),
     model_name: Optional[str] = Query(default=None, description="Model name (for Whisper)"),
     language: Optional[str] = Query(default=None, description="Language code (e.g., 'zh', 'en')"),
+    prompt: Optional[str] = Query(default=None, description="Custom prompt: Whisper uses it for vocabulary hints; Tingwu for LLM post-processing"),
 ):
-    """Start transcription for a downloaded task (step 2)."""
+    """Start transcription for a downloaded task (step 2).
+
+    The prompt parameter works differently for each provider:
+    - Whisper: initial_prompt for vocabulary/style hints (max ~900 chars)
+      Example: "术语：Kubernetes, Docker" or "这是一个播客对话"
+    - Tingwu: custom prompt for LLM post-processing
+      Example: "生成详细摘要" or "提取关键信息"
+    """
     task = TASKS.get(task_id)
     if not task:
         logger.warning(f"[{task_id}] Transcribe request for non-existent task")
@@ -179,6 +187,9 @@ async def transcribe_task(
     provider_name = "Whisper 离线" if provider == ASR_PROVIDER_WHISPER else "通义听悟"
     logger.info(f"[{task_id}] Starting transcription with {provider_name}: {task.audio_path}")
     add_task_log(task_id, f"开始转写任务 (使用 {provider_name})...")
+    if prompt:
+        logger.info(f"[{task_id}] Custom prompt: {prompt[:50]}...")
+        add_task_log(task_id, f"使用自定义 Prompt: {prompt[:30]}...")
 
     def _transcribe():
         def log_callback(msg: str):
@@ -195,6 +206,7 @@ async def transcribe_task(
                 provider=provider,
                 model_name=model_name,
                 language=language,
+                prompt=prompt,
                 log_callback=log_callback,
             )
 

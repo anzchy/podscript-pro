@@ -80,6 +80,20 @@
           <small class="tingwu-note">需要配置阿里云 AccessKey 和通义听悟 AppKey</small>
         </div>
 
+        <!-- Custom Prompt Input -->
+        <div class="option-group">
+          <label for="customPrompt">自定义 Prompt（可选）：</label>
+          <textarea
+            id="customPrompt"
+            rows="2"
+            placeholder="Whisper: 输入术语或风格提示，如 &quot;术语：Kubernetes, Docker&quot;&#10;Tingwu: 用于LLM后处理，如 &quot;生成详细摘要&quot;"
+          ></textarea>
+          <small class="prompt-hint">
+            <strong>Whisper:</strong> 用于提高专业术语识别率或指定对话风格（最多~900字符）<br>
+            <strong>Tingwu:</strong> 用于大模型后处理，如生成摘要、提取关键信息等
+          </small>
+        </div>
+
         <!-- Transcribe Button -->
         <div id="transcribeSection">
           <button id="transcribeBtn" class="transcribe-btn" disabled>开始转写</button>

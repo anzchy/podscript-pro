@@ -95,13 +95,20 @@ def _create_common_request(method: str, uri: str):
     return request
 
 
-def submit_transcribe_job(cfg: AppConfig, audio_url: str) -> str:
+def submit_transcribe_job(
+    cfg: AppConfig,
+    audio_url: str,
+    custom_prompt: str | None = None
+) -> str:
     """
     Submit an offline transcription task to Tingwu.
 
     Args:
         cfg: Application config with Alibaba Cloud credentials
         audio_url: Public URL of the audio file to transcribe
+        custom_prompt: Optional custom prompt for LLM post-processing.
+            Useful for generating different summary granularities,
+            extracting specific business information, etc.
 
     Returns:
         Task ID for polling status
@@ -126,6 +133,14 @@ def submit_transcribe_job(cfg: AppConfig, audio_url: str) -> str:
             }
         }
     }
+
+    # Add custom prompt if provided
+    if custom_prompt:
+        body['Parameters']['CustomPromptEnabled'] = True
+        body['Parameters']['CustomPrompt'] = {
+            'Content': custom_prompt
+        }
+        logger.info(f"submit_transcribe_job: Custom prompt enabled, length={len(custom_prompt)}")
     logger.debug(f"submit_transcribe_job: Request body (without FileUrl): AppKey={cfg.tingwu_app_key[:8] if cfg.tingwu_app_key else 'None'}..., SourceLanguage=cn")
 
     # Create task request
