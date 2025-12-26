@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  podscript:
+    build: .
+    ports:
+      - "8001:8001"
+    environment:
+      - ALIBABA_CLOUD_ACCESS_KEY_ID=${ALIBABA_CLOUD_ACCESS_KEY_ID}
+      - ALIBABA_CLOUD_ACCESS_KEY_SECRET=${ALIBABA_CLOUD_ACCESS_KEY_SECRET}
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER}
+      - STORAGE_BUCKET=${STORAGE_BUCKET}
+      - STORAGE_PUBLIC_HOST=${STORAGE_PUBLIC_HOST}
+      - STORAGE_REGION=${STORAGE_REGION}
+      - TINGWU_ENABLED=${TINGWU_ENABLED}
+      - TINGWU_APP_KEY=${TINGWU_APP_KEY}
+    volumes:
+      - ./artifacts:/app/artifacts
+    restart: unless-stopped
