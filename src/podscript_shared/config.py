@@ -26,14 +26,20 @@ def load_config() -> AppConfig:
     storage_region = os.getenv("STORAGE_REGION") or os.getenv("OSS_REGION")
     storage_endpoint = os.getenv("STORAGE_ENDPOINT")
     return AppConfig(
+        # Alibaba Cloud credentials
         access_key_id=(os.getenv("ALIBABA_CLOUD_ACCESS_KEY_ID") or "").strip() or None,
         access_key_secret=(os.getenv("ALIBABA_CLOUD_ACCESS_KEY_SECRET") or "").strip() or None,
         security_token=(os.getenv("ALIBABA_CLOUD_SECURITY_TOKEN") or "").strip() or None,
+        # Tencent Cloud credentials
+        tencent_secret_id=(os.getenv("TENCENT_SECRET_ID") or "").strip() or None,
+        tencent_secret_key=(os.getenv("TENCENT_SECRET_KEY") or "").strip() or None,
+        # Storage config
         storage_provider=storage_provider,
         storage_bucket=storage_bucket,
         storage_public_host=storage_public_host,
         storage_region=storage_region,
         storage_endpoint=storage_endpoint,
+        # API keys
         qwen_api_key=os.getenv("QWEN_API_KEY"),
         tingwu_app_key=(os.getenv("TINGWU_APP_KEY") or "").strip() or None,
         artifacts_dir=artifacts_dir,

@@ -18,25 +18,25 @@ ASR_PROVIDER_TINGWU = "tingwu"
 ASR_PROVIDER_WHISPER = "whisper"
 
 # Lazy import to handle missing SDKs
-upload_to_oss = None
+upload_audio = None
 submit_transcribe_job = None
 poll_transcribe_result = None
 
 
 def _import_tingwu_adapters():
-    global upload_to_oss, submit_transcribe_job, poll_transcribe_result
+    global upload_audio, submit_transcribe_job, poll_transcribe_result
     try:
+        from podscript_pipeline.storage import upload_audio as _upload_audio
         from podscript_pipeline.tingwu_adapter import (
-            upload_to_oss as _upload_to_oss,
             submit_transcribe_job as _submit_transcribe_job,
             poll_transcribe_result as _poll_transcribe_result
         )
-        upload_to_oss = _upload_to_oss
+        upload_audio = _upload_audio
         submit_transcribe_job = _submit_transcribe_job
         poll_transcribe_result = _poll_transcribe_result
         return True
     except ImportError as e:
-        logger.warning(f"Failed to import tingwu_adapter: {e}")
+        logger.warning(f"Failed to import tingwu adapters: {e}")
         return False
 
 
@@ -54,14 +54,18 @@ def get_available_providers() -> Dict[str, Dict[str, Any]]:
     cfg = load_config()
 
     # Check Tingwu availability
+    # Tingwu requires: credentials, app key, and storage (OSS or COS)
+    storage_ok = (
+        cfg.storage_provider in ("oss", "cos")
+        and cfg.storage_bucket
+        and cfg.storage_region
+    )
     tingwu_available = bool(
         os.getenv("TINGWU_ENABLED") == "1"
         and cfg.access_key_id
         and cfg.access_key_secret
         and cfg.tingwu_app_key
-        and cfg.storage_provider == "oss"
-        and cfg.storage_bucket
-        and cfg.storage_region
+        and storage_ok
     )
 
     # Check Whisper availability
@@ -181,14 +185,18 @@ def _transcribe_with_tingwu(
     cfg = load_config()
 
     # Verify Tingwu configuration
+    # Supports both Alibaba OSS and Tencent COS for storage
+    storage_ok = (
+        cfg.storage_provider in ("oss", "cos")
+        and cfg.storage_bucket
+        and cfg.storage_region
+    )
     use_tingwu = (
         os.getenv("TINGWU_ENABLED") == "1"
         and cfg.access_key_id
         and cfg.access_key_secret
         and cfg.tingwu_app_key
-        and cfg.storage_provider == "oss"
-        and cfg.storage_bucket
-        and cfg.storage_region
+        and storage_ok
     )
 
     if not use_tingwu:
@@ -197,9 +205,13 @@ def _transcribe_with_tingwu(
     if not _import_tingwu_adapters():
         raise ImportError("Failed to import Tingwu adapter. Check SDK installation.")
 
+    # Get storage provider name for logging
+    from podscript_pipeline.storage import get_storage_provider_name
+    storage_name = get_storage_provider_name(cfg)
+
     try:
-        log("Uploading audio to OSS...")
-        audio_url = upload_to_oss(cfg, input_path)
+        log(f"Uploading audio to {storage_name}...")
+        audio_url = upload_audio(cfg, input_path)
         log(f"Audio uploaded successfully")
 
         log("Submitting transcribe job to Tingwu...")

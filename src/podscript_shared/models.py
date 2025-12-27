@@ -51,14 +51,23 @@ class TaskDetail(BaseModel):
 
 
 class AppConfig(BaseModel):
+    # Alibaba Cloud credentials (for OSS and Tingwu)
     access_key_id: Optional[str] = None
     access_key_secret: Optional[str] = None
     security_token: Optional[str] = None
-    storage_provider: Optional[str] = None
+
+    # Tencent Cloud credentials (for COS)
+    tencent_secret_id: Optional[str] = None
+    tencent_secret_key: Optional[str] = None
+
+    # Storage config (provider: 'oss' or 'cos')
+    storage_provider: Optional[str] = None  # 'oss' = Alibaba OSS, 'cos' = Tencent COS
     storage_bucket: Optional[str] = None
     storage_public_host: Optional[str] = None
     storage_region: Optional[str] = None
     storage_endpoint: Optional[str] = None
+
+    # API keys
     qwen_api_key: Optional[str] = None
     tingwu_app_key: Optional[str] = None  # Tingwu AppKey from console
     artifacts_dir: str = "artifacts"

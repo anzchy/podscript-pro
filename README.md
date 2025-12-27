@@ -9,6 +9,7 @@
 - **多模型选择**：Whisper 提供 6 种模型，按需选择速度与精度
 - **自定义 Prompt**：支持输入提示词优化转写效果或进行后处理
 - **说话人分离**：通义听悟支持自动识别不同发言人
+- **双云存储**：支持阿里云 OSS 和腾讯云 COS 两种对象存储
 - **实时进度**：转写过程实时显示进度和日志
 
 ## 快速开始
@@ -78,7 +79,9 @@ pip install openai-whisper
 **配置步骤：**
 1. 创建阿里云 RAM 用户并获取 AccessKey
 2. 开通通义听悟服务并获取 AppKey
-3. 创建 OSS Bucket 用于临时存储音频
+3. 配置云存储（二选一）：
+   - **阿里云 OSS**：创建 OSS Bucket
+   - **腾讯云 COS**：创建 COS Bucket（需单独配置腾讯云密钥）
 4. 在 `.env` 中配置（见下方配置章节）
 
 ## 自定义 Prompt
@@ -242,10 +245,12 @@ Whisper 模式开箱即用，无需任何配置。
 
 ### 通义听悟模式
 
-在项目根目录创建 `.env` 文件：
+在项目根目录创建 `.env` 文件（可复制 `.env.example`）：
+
+#### 方案一：使用阿里云 OSS 存储
 
 ```env
-# 阿里云 AccessKey
+# 阿里云 AccessKey（OSS 和 Tingwu 共用）
 ALIBABA_CLOUD_ACCESS_KEY_ID=your-ak-id
 ALIBABA_CLOUD_ACCESS_KEY_SECRET=your-ak-secret
 
@@ -253,7 +258,7 @@ ALIBABA_CLOUD_ACCESS_KEY_SECRET=your-ak-secret
 TINGWU_APP_KEY=your-tingwu-app-key
 TINGWU_ENABLED=1
 
-# OSS 配置（用于临时存储音频）
+# OSS 配置
 STORAGE_PROVIDER=oss
 STORAGE_BUCKET=your-oss-bucket
 STORAGE_REGION=cn-shanghai
@@ -262,7 +267,33 @@ STORAGE_REGION=cn-shanghai
 ARTIFACTS_DIR=artifacts
 ```
 
-> 不要将 `.env` 提交到 Git
+#### 方案二：使用腾讯云 COS 存储
+
+如果你希望使用腾讯云 COS 存储音频文件（仍使用阿里云通义听悟进行转写）：
+
+```env
+# 阿里云 AccessKey（仅用于 Tingwu API）
+ALIBABA_CLOUD_ACCESS_KEY_ID=your-ak-id
+ALIBABA_CLOUD_ACCESS_KEY_SECRET=your-ak-secret
+
+# 通义听悟 AppKey
+TINGWU_APP_KEY=your-tingwu-app-key
+TINGWU_ENABLED=1
+
+# 腾讯云 COS 配置
+STORAGE_PROVIDER=cos
+STORAGE_BUCKET=your-bucket-1250000000
+STORAGE_REGION=ap-shanghai
+TENCENT_SECRET_ID=your-secret-id
+TENCENT_SECRET_KEY=your-secret-key
+
+# 产物目录
+ARTIFACTS_DIR=artifacts
+```
+
+> **注意**：
+> - 通义听悟 API 要求音频 URL 有效期至少 3 小时，COS 预签名 URL 已自动设置为 3 小时
+> - 不要将 `.env` 提交到 Git
 
 ## 目录结构
 
@@ -271,12 +302,17 @@ src/
 ├── podscript_api/          # API 网关与 Web UI
 │   ├── main.py             # FastAPI 应用入口
 │   └── static/             # 前端静态文件
+│       ├── index.html      # 主页（任务创建）
+│       ├── result.html     # 转写结果页
+│       └── *.css/*.js      # 样式与脚本
 ├── podscript_pipeline/     # 处理管线
 │   ├── download.py         # 音频下载（yt-dlp）
 │   ├── preprocess.py       # 音频预处理
 │   ├── asr.py              # ASR 调度层
 │   ├── whisper_adapter.py  # Whisper 离线转写
 │   ├── tingwu_adapter.py   # 通义听悟在线转写
+│   ├── storage.py          # 云存储统一接口
+│   ├── cos_adapter.py      # 腾讯云 COS 适配器
 │   └── formatters.py       # 结果格式化
 └── podscript_shared/       # 共享模型与配置
     ├── models.py           # Pydantic 模型
@@ -284,6 +320,7 @@ src/
 
 tests/                      # 测试用例
 docs/                       # 文档
+specs/                      # 功能规格文档
 ```
 
 ## 架构图
@@ -301,6 +338,9 @@ graph TD
         API -->|启动转写| ASR[ASR Dispatcher]
         ASR -->|Whisper| WH[Whisper Adapter]
         ASR -->|Tingwu| TW[Tingwu Adapter]
+        TW --> Storage{Storage}
+        Storage -->|OSS| OSS[阿里云 OSS]
+        Storage -->|COS| COS[腾讯云 COS]
         WH --> Format[Formatter]
         TW --> Format
     end
@@ -374,6 +414,11 @@ PYTHONPATH=./src uvicorn ...
 - 确认 `STORAGE_REGION` 与 Bucket 所在区域一致
 - 系统时间需与网络时间同步
 
+### COS 上传失败
+- 检查 `TENCENT_SECRET_ID` 和 `TENCENT_SECRET_KEY` 是否正确
+- 确认 Bucket 名称包含 APPID 后缀（如 `bucket-1250000000`）
+- 确认 `STORAGE_REGION` 格式正确（如 `ap-shanghai`、`ap-beijing`）
+
 ## 部署指南
 
 - **[阿里云服务配置指南](docs/aliyun-setup.md)** - 从零配置 OSS 和通义听悟，含故障排除
@@ -391,6 +436,12 @@ PYTHONPATH=./src uvicorn ...
 - [听悟 OpenAPI 文档](https://next.api.aliyun.com/api/tingwu/2023-09-30/GetTaskInfo?lang=PYTHON)
 - [tingwu SDK](https://github.com/aliyun/alibabacloud-python-sdk/tree/master/tingwu-20230930)
 - [RAM 用户创建](https://help.aliyun.com/zh/ram/user-guide/create-an-accesskey-pair)
+- [OSS 对象存储](https://help.aliyun.com/zh/oss/)
+
+**腾讯云**
+- [腾讯云 COS 对象存储](https://cloud.tencent.com/document/product/436)
+- [COS Python SDK](https://cloud.tencent.com/document/product/436/12269)
+- [API 密钥管理](https://console.cloud.tencent.com/cam/capi)
 
 **工具**
 - [yt-dlp 文档](https://github.com/yt-dlp/yt-dlp)

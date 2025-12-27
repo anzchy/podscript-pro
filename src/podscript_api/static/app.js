@@ -358,25 +358,19 @@ async function pollTranscription() {
       const logs = await fetchLogs(currentTaskId)
       updateLogViewer(logs)
 
-      // Transcription complete - show results
+      // Transcription complete - redirect to result page
       if (t.status === 'completed') {
         clearInterval(pollTimer)
         isReadyToTranscribe = false
         els.transcribeBtn.disabled = true
-        els.transcribeHint.textContent = '转写完成！'
+        els.transcribeHint.textContent = '转写完成！正在跳转...'
         els.transcribeHint.style.color = '#2ea043'
         els.transcribeStatus.textContent = '完成！'
 
-        const r = await fetchResults(currentTaskId)
-        els.links.hidden = false
-        els.srtLink.href = r.srt_url
-        els.mdLink.href = r.markdown_url
-        try {
-          const md = await fetchMarkdown(r.markdown_url)
-          els.result.textContent = md
-        } catch {
-          els.result.textContent = '结果已生成，点击下方链接下载.'
-        }
+        // Redirect to result page after a short delay
+        setTimeout(() => {
+          window.location.href = `/static/result.html?task_id=${currentTaskId}`
+        }, 1000)
       }
 
       // Failed

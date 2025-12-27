@@ -1,132 +1,230 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Podscript MVP</title>
-    <link rel="stylesheet" href="/static/styles.css" />
-  </head>
-  <body>
-    <main class="container">
-      <h1>Podscript MVP</h1>
-      <p>查看 API 文档：<a href="/docs" target="_blank">/docs</a></p>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podscript</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
 
-      <!-- Step 1: Download from YouTube -->
-      <section class="card">
-        <h3>第一步：下载音频</h3>
-        <label for="url">输入 YouTube 链接</label>
-        <div class="row">
-          <input id="url" type="url" placeholder="https://www.youtube.com/watch?v=..." />
-          <button id="downloadBtn">开始下载</button>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                </div>
+                <span class="logo-text">Podscript</span>
+            </div>
+            <a href="/docs" target="_blank" class="nav-link">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                API 文档
+            </a>
         </div>
-        <div id="downloadError" class="error" hidden></div>
-      </section>
+    </header>
 
-      <!-- Status display -->
-      <section class="card">
-        <div class="status">
-          <div>任务ID：<span id="taskId">-</span></div>
-          <div>状态：<span id="status">-</span></div>
-        </div>
-        <div class="progress">
-          <div id="progressBar" class="bar"></div>
-        </div>
-      </section>
+    <!-- Main Content -->
+    <main class="main-container">
 
-      <!-- Step 2: Transcription -->
-      <section class="card">
-        <h3>第二步：开始转写</h3>
-
-        <!-- File upload -->
-        <div class="row" style="margin-bottom:12px; align-items: center;">
-          <input id="file" type="file" accept="audio/*,video/*" />
-          <small>或上传本地音/视频文件</small>
+        <!-- Hero Section -->
+        <div class="hero">
+            <h1 class="hero-title">音视频转写工具</h1>
+            <p class="hero-subtitle">输入 YouTube 链接或上传音频文件，获取精准的文字转写结果</p>
         </div>
 
-        <!-- ASR Provider Selection -->
-        <div class="option-group">
-          <label>转写引擎：</label>
-          <div class="radio-group">
-            <label class="radio-label">
-              <input type="radio" name="provider" value="whisper" checked />
-              <span>Whisper 离线</span>
-            </label>
-            <label class="radio-label">
-              <input type="radio" name="provider" value="tingwu" />
-              <span>阿里云通义听悟</span>
-            </label>
-          </div>
-        </div>
+        <!-- Step 1: Download Audio -->
+        <section class="card card-leaf-tl">
+            <div class="step-header">
+                <div class="step-number">1</div>
+                <h2 class="step-title">下载音频</h2>
+            </div>
 
-        <!-- Whisper Model Selection -->
-        <div id="whisperOptions" class="option-group">
-          <label>Whisper 模型：</label>
-          <div class="model-select-row">
-            <select id="whisperModel">
-              <option value="tiny">tiny (39M, ~1GB VRAM, 最快)</option>
-              <option value="base" selected>base (74M, ~1GB VRAM, 推荐)</option>
-              <option value="small">small (244M, ~2GB VRAM)</option>
-              <option value="medium">medium (769M, ~5GB VRAM)</option>
-              <option value="large">large (1550M, ~10GB VRAM, 最准)</option>
-              <option value="turbo">turbo (809M, ~6GB VRAM, 快+准)</option>
-            </select>
-            <button id="downloadModelBtn" class="btn-secondary">下载模型</button>
-          </div>
-          <small id="modelStatus" class="model-status"></small>
-        </div>
+            <label class="input-label" for="url">YouTube 链接</label>
+            <div class="input-row">
+                <div class="input-wrapper">
+                    <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <input id="url" type="url" class="input input-with-icon" placeholder="https://www.youtube.com/watch?v=...">
+                </div>
+                <button id="downloadBtn" class="btn btn-primary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                    开始下载
+                </button>
+            </div>
+            <div id="downloadError" class="error-message" hidden></div>
+        </section>
 
-        <!-- Tingwu Options (hidden by default) -->
-        <div id="tingwuOptions" class="option-group" hidden>
-          <small class="tingwu-note">需要配置阿里云 AccessKey 和通义听悟 AppKey</small>
-        </div>
+        <!-- Status Card -->
+        <section class="card card-status">
+            <div class="status-row">
+                <div class="status-item">
+                    <span class="status-label">任务 ID</span>
+                    <span id="taskId" class="status-value">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">状态</span>
+                    <span id="status" class="status-value">-</span>
+                </div>
+            </div>
+            <div class="progress-bar">
+                <div id="progressBar" class="progress-fill"></div>
+            </div>
+        </section>
 
-        <!-- Custom Prompt Input -->
-        <div class="option-group">
-          <label for="customPrompt">自定义 Prompt（可选）：</label>
-          <textarea
-            id="customPrompt"
-            rows="2"
-            placeholder="Whisper: 输入术语或风格提示，如 &quot;术语：Kubernetes, Docker&quot;&#10;Tingwu: 用于LLM后处理，如 &quot;生成详细摘要&quot;"
-          ></textarea>
-          <small class="prompt-hint">
-            <strong>Whisper:</strong> 用于提高专业术语识别率或指定对话风格（最多~900字符）<br>
-            <strong>Tingwu:</strong> 用于大模型后处理，如生成摘要、提取关键信息等
-          </small>
-        </div>
+        <!-- Step 2: Transcription -->
+        <section class="card card-leaf-tl">
+            <div class="step-header">
+                <div class="step-number">2</div>
+                <h2 class="step-title">开始转写</h2>
+            </div>
 
-        <!-- Transcribe Button -->
-        <div id="transcribeSection">
-          <button id="transcribeBtn" class="transcribe-btn" disabled>开始转写</button>
-          <p id="transcribeHint" class="hint">请先下载音频或上传本地文件</p>
-        </div>
-        <div id="transcribeError" class="error" hidden></div>
+            <!-- File Upload -->
+            <div class="file-upload">
+                <input id="file" type="file" accept="audio/*,video/*" class="file-input">
+                <label for="file" class="file-label">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>
+                    <span>点击或拖拽上传本地音/视频文件</span>
+                </label>
+            </div>
 
-        <!-- Transcription Progress -->
-        <div id="transcribeProgress" class="transcribe-progress" hidden>
-          <div class="progress-header">
-            <span>转写进度</span>
-            <span id="transcribeStatus">准备中...</span>
-          </div>
-          <div class="progress">
-            <div id="transcribeProgressBar" class="bar"></div>
-          </div>
-          <div id="logViewer" class="log-viewer">
-            <div id="logContent"></div>
-          </div>
-        </div>
-      </section>
+            <!-- Provider Selection -->
+            <div class="option-section">
+                <label class="input-label">转写引擎</label>
+                <div class="radio-group">
+                    <label class="radio-card">
+                        <input type="radio" name="provider" value="whisper" checked>
+                        <div class="radio-content">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="16" x="4" y="4" rx="2"/><rect width="6" height="6" x="9" y="9" rx="1"/><path d="M15 2v2"/><path d="M15 20v2"/><path d="M2 15h2"/><path d="M2 9h2"/><path d="M20 15h2"/><path d="M20 9h2"/><path d="M9 2v2"/><path d="M9 20v2"/></svg>
+                            <span>Whisper 离线</span>
+                        </div>
+                    </label>
+                    <label class="radio-card">
+                        <input type="radio" name="provider" value="tingwu">
+                        <div class="radio-content">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+                            <span>阿里云通义听悟</span>
+                        </div>
+                    </label>
+                </div>
+            </div>
 
-      <!-- Results -->
-      <section class="card">
-        <h2>转写结果</h2>
-        <div id="result" class="result">尚未生成</div>
-        <div id="links" class="links" hidden>
-          <a id="srtLink" href="#" target="_blank">下载 SRT</a>
-          <a id="mdLink" href="#" target="_blank">下载 Markdown</a>
-        </div>
-      </section>
+            <!-- Whisper Options -->
+            <div id="whisperOptions" class="option-section option-box">
+                <label class="input-label">Whisper 模型</label>
+                <div class="select-row">
+                    <div class="select-wrapper">
+                        <select id="whisperModel" class="select">
+                            <option value="tiny">tiny (39M, ~1GB VRAM, 最快)</option>
+                            <option value="base" selected>base (74M, ~1GB VRAM, 推荐)</option>
+                            <option value="small">small (244M, ~2GB VRAM)</option>
+                            <option value="medium">medium (769M, ~5GB VRAM)</option>
+                            <option value="large">large (1550M, ~10GB VRAM, 最准)</option>
+                            <option value="turbo">turbo (809M, ~6GB VRAM, 快+准)</option>
+                        </select>
+                        <svg class="select-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+                    </div>
+                    <button id="downloadModelBtn" class="btn btn-secondary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+                        下载模型
+                    </button>
+                </div>
+                <p id="modelStatus" class="hint-text"></p>
+            </div>
+
+            <!-- Tingwu Options (hidden by default) -->
+            <div id="tingwuOptions" class="option-section option-box" hidden>
+                <div class="info-note">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+                    <span>需要配置阿里云 AccessKey 和通义听悟 AppKey</span>
+                </div>
+            </div>
+
+            <!-- Custom Prompt -->
+            <div class="option-section">
+                <label class="input-label" for="customPrompt">自定义 Prompt（可选）</label>
+                <textarea
+                    id="customPrompt"
+                    class="textarea"
+                    rows="3"
+                    placeholder="Whisper: 输入术语或风格提示，如 &quot;术语：Kubernetes, Docker&quot;&#10;Tingwu: 用于LLM后处理，如 &quot;生成详细摘要&quot;"
+                ></textarea>
+                <p class="hint-text">
+                    <strong>Whisper:</strong> 用于提高专业术语识别率（最多~900字符）<br>
+                    <strong>Tingwu:</strong> 用于大模型后处理，如生成摘要、提取关键信息
+                </p>
+            </div>
+
+            <!-- Transcribe Button -->
+            <div id="transcribeSection" class="transcribe-section">
+                <button id="transcribeBtn" class="btn btn-accent" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                    开始转写
+                </button>
+                <p id="transcribeHint" class="hint-text">请先下载音频或上传本地文件</p>
+            </div>
+            <div id="transcribeError" class="error-message" hidden></div>
+
+            <!-- Transcription Progress -->
+            <div id="transcribeProgress" class="transcribe-progress" hidden>
+                <div class="progress-header">
+                    <span class="progress-label">转写进度</span>
+                    <span id="transcribeStatus" class="progress-status">准备中...</span>
+                </div>
+                <div class="progress-bar">
+                    <div id="transcribeProgressBar" class="progress-fill"></div>
+                </div>
+                <div id="logViewer" class="log-viewer">
+                    <div id="logContent"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Results Card -->
+        <section class="card card-leaf-tr">
+            <div class="result-header">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="result-icon"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                <h2 class="step-title">转写结果</h2>
+            </div>
+
+            <div id="result" class="result-content">尚未生成</div>
+
+            <div id="links" class="result-links" hidden>
+                <a id="srtLink" href="#" target="_blank" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
+                    下载 SRT
+                </a>
+                <a id="mdLink" href="#" target="_blank" class="btn btn-secondary">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
+                    下载 Markdown
+                </a>
+            </div>
+        </section>
+
     </main>
 
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-top">
+                <div class="logo logo-footer">
+                    <div class="logo-icon logo-icon-small">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                    </div>
+                    <span class="logo-text">Podscript</span>
+                </div>
+                <div class="footer-links">
+                    <a href="/docs" class="footer-link">API 文档</a>
+                    <a href="https://github.com" target="_blank" class="footer-link">GitHub</a>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                © 2024 Podscript. 音视频转写工具
+            </div>
+        </div>
+    </footer>
+
     <script src="/static/app.js"></script>
-  </body>
+</body>
 </html>

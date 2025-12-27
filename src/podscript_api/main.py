@@ -256,6 +256,138 @@ async def get_logs(task_id: str) -> List[TaskLog]:
     return task.logs
 
 
+class TranscriptSegment(BaseModel):
+    id: int
+    start: float
+    end: float
+    text: str
+    speaker: str = ""
+
+
+class TranscriptResponse(BaseModel):
+    segments: List[TranscriptSegment]
+    media_url: str
+    media_type: str
+    duration: float = 0
+
+
+@app.get("/tasks/{task_id}/transcript", response_model=TranscriptResponse)
+async def get_transcript(task_id: str):
+    """Get structured transcript data for the result viewer."""
+    import json
+
+    task = TASKS.get(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.status != TaskStatus.completed or not task.results:
+        raise HTTPException(status_code=400, detail="Transcript not ready")
+
+    # Try to load transcript from JSON file first
+    task_dir = Path(cfg.artifacts_dir) / task_id
+    json_path = task_dir / "result.json"
+
+    segments = []
+    duration = 0
+
+    if json_path.exists():
+        with open(json_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            segments = [
+                TranscriptSegment(
+                    id=i,
+                    start=seg.get("start", 0),
+                    end=seg.get("end", 0),
+                    text=seg.get("text", ""),
+                    speaker=str(seg.get("speaker", ""))
+                )
+                for i, seg in enumerate(data.get("segments", []))
+            ]
+            duration = data.get("duration", 0)
+    else:
+        # Fallback: parse from markdown
+        md_path = task_dir / "result.md"
+        if md_path.exists():
+            segments = _parse_markdown_transcript(md_path)
+
+    # Determine media URL
+    media_url = ""
+    media_type = "audio"
+
+    # Check for common audio/video files
+    for ext in [".mp3", ".m4a", ".wav", ".mp4", ".webm"]:
+        for file in task_dir.glob(f"*{ext}"):
+            media_url = f"/artifacts/{task_id}/{file.name}"
+            if ext in [".mp4", ".webm"]:
+                media_type = "video"
+            break
+        if media_url:
+            break
+
+    # Calculate duration from segments if not set
+    if not duration and segments:
+        duration = max(s.end for s in segments)
+
+    return TranscriptResponse(
+        segments=segments,
+        media_url=media_url,
+        media_type=media_type,
+        duration=duration
+    )
+
+
+def _parse_markdown_transcript(md_path: Path) -> List[TranscriptSegment]:
+    """Parse transcript segments from markdown file."""
+    import re
+
+    segments = []
+    text = md_path.read_text(encoding="utf-8")
+    lines = text.split("\n")
+
+    current_speaker = ""
+    current_time = 0.0
+    current_text = ""
+    segment_id = 0
+
+    for line in lines:
+        # Match speaker line: "发言人1  00:16" or just "00:16"
+        match = re.match(r"^(发言人\d+)?\s*(\d{2}:\d{2})", line)
+        if match:
+            # Save previous segment
+            if current_text.strip():
+                segments.append(TranscriptSegment(
+                    id=segment_id,
+                    start=current_time,
+                    end=current_time + 10,  # Estimated
+                    text=current_text.strip(),
+                    speaker=current_speaker
+                ))
+                segment_id += 1
+
+            speaker_str = match.group(1)
+            current_speaker = speaker_str.replace("发言人", "") if speaker_str else ""
+            time_parts = match.group(2).split(":")
+            current_time = int(time_parts[0]) * 60 + int(time_parts[1])
+            current_text = ""
+        elif line.strip() and not line.startswith("#"):
+            current_text += (" " if current_text else "") + line.strip()
+
+    # Add last segment
+    if current_text.strip():
+        segments.append(TranscriptSegment(
+            id=segment_id,
+            start=current_time,
+            end=current_time + 10,
+            text=current_text.strip(),
+            speaker=current_speaker
+        ))
+
+    # Fix end times based on next segment start
+    for i in range(len(segments) - 1):
+        segments[i].end = segments[i + 1].start
+
+    return segments
+
+
 @app.post("/tasks/upload", response_model=TaskSummary)
 async def upload_task(file: UploadFile = File(...), bg: BackgroundTasks = BackgroundTasks()):
     """Upload a local audio/video file (step 1). Use POST /tasks/{id}/transcribe for step 2."""
