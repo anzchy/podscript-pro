@@ -40,6 +40,14 @@ class TaskLog(BaseModel):
     message: str
 
 
+class TranscriptSegment(BaseModel):
+    """A single transcript segment for streaming display."""
+    start: float
+    end: float
+    text: str
+    speaker: str = ""
+
+
 class TaskDetail(BaseModel):
     id: str
     status: TaskStatus
@@ -48,6 +56,7 @@ class TaskDetail(BaseModel):
     results: Optional[TaskResults] = None
     audio_path: Optional[str] = None  # Path to downloaded audio file
     logs: List[TaskLog] = []  # Task execution logs
+    partial_segments: List[TranscriptSegment] = []  # Streaming transcript segments
 
 
 class AppConfig(BaseModel):
@@ -63,6 +72,7 @@ class AppConfig(BaseModel):
     # Storage config (provider: 'oss' or 'cos')
     storage_provider: Optional[str] = None  # 'oss' = Alibaba OSS, 'cos' = Tencent COS
     storage_bucket: Optional[str] = None
+    storage_prefix: Optional[str] = None  # Folder path prefix, e.g., 'audio/tingwu'
     storage_public_host: Optional[str] = None
     storage_region: Optional[str] = None
     storage_endpoint: Optional[str] = None

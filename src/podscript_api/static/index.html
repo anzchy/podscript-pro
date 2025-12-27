@@ -83,10 +83,24 @@
             <!-- File Upload -->
             <div class="file-upload">
                 <input id="file" type="file" accept="audio/*,video/*" class="file-input">
-                <label for="file" class="file-label">
+                <label for="file" class="file-label" id="fileLabel">
                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242"/><path d="M12 12v9"/><path d="m16 16-4-4-4 4"/></svg>
-                    <span>点击或拖拽上传本地音/视频文件</span>
+                    <span id="fileLabelText">点击或拖拽上传本地音/视频文件</span>
                 </label>
+            </div>
+            <div id="fileStatus" class="file-status" hidden>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                <span id="fileStatusText"></span>
+            </div>
+
+            <!-- Direct Audio URL Input -->
+            <div class="option-section">
+                <label class="input-label" for="directAudioUrl">或输入音频/视频公网链接</label>
+                <div class="input-wrapper">
+                    <svg class="input-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                    <input id="directAudioUrl" type="url" class="input input-with-icon" placeholder="https://your-bucket.cos.ap-shanghai.myqcloud.com/audio.mp3">
+                </div>
+                <p class="hint-text">支持 OSS/COS 预签名链接或任何公开的音视频 URL，使用此链接将跳过云端上传步骤</p>
             </div>
 
             <!-- Provider Selection -->
@@ -186,9 +200,15 @@
             <div class="result-header">
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="result-icon"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
                 <h2 class="step-title">转写结果</h2>
+                <span id="segmentCount" class="segment-count" hidden></span>
             </div>
 
             <div id="result" class="result-content">尚未生成</div>
+
+            <!-- Streaming Transcript Display -->
+            <div id="streamingTranscript" class="streaming-transcript" hidden>
+                <div id="transcriptSegments" class="transcript-segments"></div>
+            </div>
 
             <div id="links" class="result-links" hidden>
                 <a id="srtLink" href="#" target="_blank" class="btn btn-secondary">
@@ -198,6 +218,10 @@
                 <a id="mdLink" href="#" target="_blank" class="btn btn-secondary">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
                     下载 Markdown
+                </a>
+                <a id="viewResultLink" href="#" class="btn btn-accent">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+                    查看详情
                 </a>
             </div>
         </section>

@@ -22,6 +22,7 @@ def load_config() -> AppConfig:
     Path(artifacts_dir).mkdir(parents=True, exist_ok=True)
     storage_provider = os.getenv("STORAGE_PROVIDER")
     storage_bucket = os.getenv("STORAGE_BUCKET") or os.getenv("OSS_BUCKET")
+    storage_prefix = os.getenv("STORAGE_PREFIX")  # e.g., 'audio/tingwu' or 'podscript'
     storage_public_host = os.getenv("STORAGE_PUBLIC_HOST") or os.getenv("OSS_PUBLIC_HOST")
     storage_region = os.getenv("STORAGE_REGION") or os.getenv("OSS_REGION")
     storage_endpoint = os.getenv("STORAGE_ENDPOINT")
@@ -36,6 +37,7 @@ def load_config() -> AppConfig:
         # Storage config
         storage_provider=storage_provider,
         storage_bucket=storage_bucket,
+        storage_prefix=storage_prefix,
         storage_public_host=storage_public_host,
         storage_region=storage_region,
         storage_endpoint=storage_endpoint,

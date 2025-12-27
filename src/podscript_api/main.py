@@ -17,6 +17,7 @@ from podscript_shared.models import (
     TaskResults,
     TaskStatus,
     TaskSummary,
+    TranscriptSegment,
 )
 from podscript_pipeline import run_pipeline, run_pipeline_from_file, run_download_only, run_transcribe_only
 from podscript_pipeline.asr import get_available_providers, ASR_PROVIDER_WHISPER, ASR_PROVIDER_TINGWU
@@ -210,7 +211,19 @@ async def transcribe_task(
                 log_callback=log_callback,
             )
 
-            add_task_log(task_id, f"转写完成，共 {results.get('meta', {}).get('segments', 0)} 个语音片段")
+            # Populate partial_segments for streaming display
+            segments = results.get("segments", [])
+            TASKS[task_id].partial_segments = [
+                TranscriptSegment(
+                    start=seg.get("start", 0),
+                    end=seg.get("end", 0),
+                    text=seg.get("text", ""),
+                    speaker=str(seg.get("speaker", ""))
+                )
+                for seg in segments
+            ]
+
+            add_task_log(task_id, f"转写完成，共 {len(segments)} 个语音片段")
             TASKS[task_id].status = TaskStatus.completed
             TASKS[task_id].progress = 1.0
             srt_url = f"/artifacts/{task_id}/result.srt"
@@ -256,7 +269,8 @@ async def get_logs(task_id: str) -> List[TaskLog]:
     return task.logs
 
 
-class TranscriptSegment(BaseModel):
+class TranscriptSegmentResponse(BaseModel):
+    """Transcript segment for the result viewer API (includes id for UI)."""
     id: int
     start: float
     end: float
@@ -265,7 +279,7 @@ class TranscriptSegment(BaseModel):
 
 
 class TranscriptResponse(BaseModel):
-    segments: List[TranscriptSegment]
+    segments: List[TranscriptSegmentResponse]
     media_url: str
     media_type: str
     duration: float = 0
@@ -293,7 +307,7 @@ async def get_transcript(task_id: str):
         with open(json_path, "r", encoding="utf-8") as f:
             data = json.load(f)
             segments = [
-                TranscriptSegment(
+                TranscriptSegmentResponse(
                     id=i,
                     start=seg.get("start", 0),
                     end=seg.get("end", 0),
@@ -335,7 +349,7 @@ async def get_transcript(task_id: str):
     )
 
 
-def _parse_markdown_transcript(md_path: Path) -> List[TranscriptSegment]:
+def _parse_markdown_transcript(md_path: Path) -> List[TranscriptSegmentResponse]:
     """Parse transcript segments from markdown file."""
     import re
 
@@ -354,7 +368,7 @@ def _parse_markdown_transcript(md_path: Path) -> List[TranscriptSegment]:
         if match:
             # Save previous segment
             if current_text.strip():
-                segments.append(TranscriptSegment(
+                segments.append(TranscriptSegmentResponse(
                     id=segment_id,
                     start=current_time,
                     end=current_time + 10,  # Estimated
@@ -373,7 +387,7 @@ def _parse_markdown_transcript(md_path: Path) -> List[TranscriptSegment]:
 
     # Add last segment
     if current_text.strip():
-        segments.append(TranscriptSegment(
+        segments.append(TranscriptSegmentResponse(
             id=segment_id,
             start=current_time,
             end=current_time + 10,
@@ -416,3 +430,162 @@ async def upload_task(file: UploadFile = File(...), bg: BackgroundTasks = Backgr
     add_task_log(task_id, "文件上传完成")
 
     return TaskSummary(id=task_id, status=TaskStatus.downloaded, progress=0.5)
+
+
+class DirectUrlTranscribeRequest(BaseModel):
+    audio_url: str
+    provider: str = ASR_PROVIDER_TINGWU  # Default to Tingwu for URL-based transcription
+    model_name: Optional[str] = None
+    language: Optional[str] = None
+    prompt: Optional[str] = None
+
+
+@app.post("/tasks/transcribe-url", response_model=TaskSummary)
+async def transcribe_url(req: DirectUrlTranscribeRequest, bg: BackgroundTasks):
+    """
+    Transcribe audio directly from a public URL (skips cloud upload).
+
+    This is useful when:
+    - Audio is already uploaded to OSS/COS with a valid signed URL
+    - Audio is accessible via any public URL
+
+    Note: The URL must be valid for at least 3 hours for Tingwu processing.
+    For Whisper, the audio will be downloaded first then transcribed locally.
+    """
+    from podscript_pipeline.asr import transcribe as run_asr
+
+    task_id = uuid.uuid4().hex[:12]
+    provider_name = "Whisper 离线" if req.provider == ASR_PROVIDER_WHISPER else "通义听悟"
+
+    logger.info(f"[{task_id}] Creating direct URL transcription task with {provider_name}")
+    logger.info(f"[{task_id}] Audio URL: {req.audio_url[:80]}...")
+
+    TASKS[task_id] = TaskDetail(id=task_id, status=TaskStatus.transcribing, progress=0.1)
+    task_dir = Path(cfg.artifacts_dir) / task_id
+    task_dir.mkdir(parents=True, exist_ok=True)
+
+    add_task_log(task_id, f"开始转写任务 (使用 {provider_name})...")
+    add_task_log(task_id, f"音频链接: {req.audio_url[:50]}...")
+    if req.prompt:
+        add_task_log(task_id, f"使用自定义 Prompt: {req.prompt[:30]}...")
+
+    def _transcribe():
+        def log_callback(msg: str):
+            add_task_log(task_id, msg)
+
+        try:
+            TASKS[task_id].progress = 0.2
+
+            if req.provider == ASR_PROVIDER_TINGWU:
+                # For Tingwu: use URL directly without downloading
+                from podscript_pipeline.tingwu_adapter import submit_transcribe_job, poll_transcribe_result
+
+                add_task_log(task_id, "提交转写任务到通义听悟...")
+                TASKS[task_id].progress = 0.3
+
+                job_id = submit_transcribe_job(cfg, req.audio_url, custom_prompt=req.prompt)
+                add_task_log(task_id, f"任务已提交: {job_id}")
+                TASKS[task_id].progress = 0.4
+
+                add_task_log(task_id, "等待转写完成...")
+                result = poll_transcribe_result(cfg, job_id)
+                add_task_log(task_id, f"转写完成，共 {len(result.get('segments', []))} 个语音片段")
+
+            else:
+                # For Whisper: download audio first then transcribe
+                import httpx
+
+                add_task_log(task_id, "下载音频文件...")
+                TASKS[task_id].progress = 0.2
+
+                # Download the audio file
+                with httpx.Client(timeout=300) as client:
+                    resp = client.get(req.audio_url, follow_redirects=True)
+                    resp.raise_for_status()
+
+                    # Determine filename from URL or Content-Disposition
+                    filename = "audio.mp3"
+                    content_disp = resp.headers.get("content-disposition", "")
+                    if "filename=" in content_disp:
+                        import re
+                        match = re.search(r'filename="?([^";\n]+)"?', content_disp)
+                        if match:
+                            filename = match.group(1)
+                    else:
+                        # Try to get filename from URL path
+                        from urllib.parse import urlparse
+                        parsed = urlparse(req.audio_url)
+                        if parsed.path:
+                            filename = Path(parsed.path).name or filename
+
+                    audio_path = task_dir / filename
+                    audio_path.write_bytes(resp.content)
+                    add_task_log(task_id, f"音频下载完成: {filename}")
+                    TASKS[task_id].audio_path = str(audio_path)
+
+                TASKS[task_id].progress = 0.4
+                add_task_log(task_id, "开始 Whisper 转写...")
+
+                result = run_asr(
+                    task_id=task_id,
+                    input_path=audio_path,
+                    provider=req.provider,
+                    model_name=req.model_name,
+                    language=req.language,
+                    prompt=req.prompt,
+                    log_callback=log_callback,
+                )
+                add_task_log(task_id, f"转写完成，共 {len(result.get('segments', []))} 个语音片段")
+
+            # Save results
+            TASKS[task_id].progress = 0.9
+            add_task_log(task_id, "保存转写结果...")
+
+            from podscript_pipeline.formatters import to_srt, to_markdown
+            import json
+
+            segments = result.get("segments", [])
+
+            # Populate partial_segments for streaming display
+            TASKS[task_id].partial_segments = [
+                TranscriptSegment(
+                    start=seg.get("start", 0),
+                    end=seg.get("end", 0),
+                    text=seg.get("text", ""),
+                    speaker=str(seg.get("speaker", ""))
+                )
+                for seg in segments
+            ]
+
+            # Save JSON
+            json_path = task_dir / "result.json"
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+
+            # Save SRT (to_srt expects dict with 'segments' key)
+            srt_path = task_dir / "result.srt"
+            srt_content = to_srt(result)
+            srt_path.write_text(srt_content, encoding="utf-8")
+
+            # Save Markdown (to_markdown expects dict with 'segments' key)
+            md_path = task_dir / "result.md"
+            md_content = to_markdown(result)
+            md_path.write_text(md_content, encoding="utf-8")
+
+            TASKS[task_id].status = TaskStatus.completed
+            TASKS[task_id].progress = 1.0
+            TASKS[task_id].results = TaskResults(
+                srt_url=f"/artifacts/{task_id}/result.srt",
+                markdown_url=f"/artifacts/{task_id}/result.md",
+                meta={"segments": len(segments)}
+            )
+            add_task_log(task_id, "结果已保存，转写任务完成！")
+
+        except Exception as e:
+            logger.error(f"[{task_id}] Direct URL transcription failed: {e}", exc_info=True)
+            add_task_log(task_id, f"转写失败: {str(e)}", "error")
+            TASKS[task_id].status = TaskStatus.failed
+            TASKS[task_id].error = {"message": str(e)}
+
+    bg.add_task(_transcribe)
+    return TaskSummary(id=task_id, status=TaskStatus.transcribing, progress=0.1)

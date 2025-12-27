@@ -1,6 +1,11 @@
 const els = {
   url: document.getElementById('url'),
   file: document.getElementById('file'),
+  fileLabel: document.getElementById('fileLabel'),
+  fileLabelText: document.getElementById('fileLabelText'),
+  fileStatus: document.getElementById('fileStatus'),
+  fileStatusText: document.getElementById('fileStatusText'),
+  directAudioUrl: document.getElementById('directAudioUrl'),
   downloadBtn: document.getElementById('downloadBtn'),
   transcribeBtn: document.getElementById('transcribeBtn'),
   transcribeHint: document.getElementById('transcribeHint'),
@@ -13,6 +18,7 @@ const els = {
   links: document.getElementById('links'),
   srtLink: document.getElementById('srtLink'),
   mdLink: document.getElementById('mdLink'),
+  viewResultLink: document.getElementById('viewResultLink'),
   // Progress elements
   transcribeProgress: document.getElementById('transcribeProgress'),
   transcribeStatus: document.getElementById('transcribeStatus'),
@@ -26,11 +32,17 @@ const els = {
   modelStatus: document.getElementById('modelStatus'),
   // Custom prompt
   customPrompt: document.getElementById('customPrompt'),
+  // Streaming transcript
+  streamingTranscript: document.getElementById('streamingTranscript'),
+  transcriptSegments: document.getElementById('transcriptSegments'),
+  segmentCount: document.getElementById('segmentCount'),
 }
 
 let currentTaskId = null
 let pollTimer = null
 let isReadyToTranscribe = false
+let hasDirectAudioUrl = false  // Track if direct audio URL is provided
+let displayedSegmentCount = 0  // Track how many segments have been rendered
 
 // Get selected provider
 function getSelectedProvider() {
@@ -180,11 +192,43 @@ function setTranscribeProgress(p) {
   els.transcribeProgressBar.style.width = `${Math.floor(val * 100)}%`
 }
 
+// Check if URL looks like an audio/video URL
+function isAudioVideoUrl(url) {
+  if (!url) return false
+  try {
+    new URL(url)  // Validate URL format
+    // Check for common audio/video extensions or cloud storage patterns
+    const audioVideoPatterns = [
+      /\.(mp3|wav|m4a|aac|ogg|flac|wma|mp4|mkv|avi|mov|webm|m4v)(\?|$)/i,
+      /\.(oss|cos)[-.].*\.aliyuncs\.com/i,  // Alibaba OSS
+      /\.cos\..*\.myqcloud\.com/i,  // Tencent COS
+      /storage\.googleapis\.com/i,  // Google Cloud Storage
+      /\.s3\..*\.amazonaws\.com/i,  // AWS S3
+      /\.blob\.core\.windows\.net/i,  // Azure Blob
+    ]
+    return audioVideoPatterns.some(pattern => pattern.test(url))
+  } catch {
+    return false
+  }
+}
+
+// Check and update direct audio URL state
+function checkDirectAudioUrl() {
+  const url = els.directAudioUrl.value.trim()
+  hasDirectAudioUrl = isAudioVideoUrl(url)
+  updateTranscribeButton()
+}
+
 function updateTranscribeButton() {
-  if (isReadyToTranscribe) {
+  if (isReadyToTranscribe || hasDirectAudioUrl) {
     els.transcribeBtn.disabled = false
-    els.transcribeHint.textContent = '音频已就绪，点击开始转写'
-    els.transcribeHint.style.color = '#2ea043'
+    if (hasDirectAudioUrl && !isReadyToTranscribe) {
+      els.transcribeHint.textContent = '检测到音频链接，点击直接转写'
+      els.transcribeHint.style.color = '#da7756'
+    } else {
+      els.transcribeHint.textContent = '音频已就绪，点击开始转写'
+      els.transcribeHint.style.color = '#2ea043'
+    }
   } else {
     els.transcribeBtn.disabled = true
     els.transcribeHint.textContent = '请先下载音频或上传本地文件'
@@ -207,6 +251,103 @@ function updateLogViewer(logs) {
   viewer.scrollTop = viewer.scrollHeight
 }
 
+// Format time in MM:SS format
+function formatTime(seconds) {
+  const mins = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
+// Get speaker avatar class
+function getSpeakerClass(speaker) {
+  if (!speaker) return 'speaker-unknown'
+  const num = parseInt(speaker.replace(/\D/g, '')) || 0
+  if (num >= 1 && num <= 5) return `speaker-${num}`
+  return `speaker-${(num % 5) + 1}`
+}
+
+// Render a single transcript segment
+function renderTranscriptSegment(segment, index, isNew = false) {
+  const speakerNum = segment.speaker ? segment.speaker.replace(/\D/g, '') || '?' : '?'
+  const speakerLabel = segment.speaker ? `发言人 ${speakerNum}` : '发言人'
+  const speakerClass = getSpeakerClass(segment.speaker)
+
+  const div = document.createElement('div')
+  div.className = `transcript-segment${isNew ? ' segment-new' : ''}`
+  div.dataset.index = index
+
+  div.innerHTML = `
+    <div class="segment-speaker">
+      <div class="segment-avatar ${speakerClass}">${speakerNum}</div>
+      <span class="segment-time">${formatTime(segment.start)}</span>
+    </div>
+    <div class="segment-content">
+      <div class="segment-label">${speakerLabel}</div>
+      <div class="segment-text">${segment.text}</div>
+    </div>
+  `
+
+  // Remove the "new" highlight after animation
+  if (isNew) {
+    setTimeout(() => {
+      div.classList.remove('segment-new')
+    }, 2000)
+  }
+
+  return div
+}
+
+// Show loading state in transcript
+function showTranscriptLoading() {
+  els.result.hidden = true
+  els.streamingTranscript.hidden = false
+  els.transcriptSegments.innerHTML = `
+    <div class="segment-loading">
+      <div class="segment-loading-dots">
+        <span></span>
+        <span></span>
+        <span></span>
+      </div>
+    </div>
+  `
+}
+
+// Update streaming transcript display with new segments
+function updateStreamingTranscript(segments) {
+  if (!segments || segments.length === 0) return
+
+  // If this is the first update, clear loading state
+  if (displayedSegmentCount === 0 && els.transcriptSegments.querySelector('.segment-loading')) {
+    els.transcriptSegments.innerHTML = ''
+  }
+
+  // Add only new segments
+  for (let i = displayedSegmentCount; i < segments.length; i++) {
+    const segment = segments[i]
+    const isNew = i === segments.length - 1 && segments.length > displayedSegmentCount
+    const segmentEl = renderTranscriptSegment(segment, i, isNew)
+    els.transcriptSegments.appendChild(segmentEl)
+  }
+
+  // Update displayed count
+  displayedSegmentCount = segments.length
+
+  // Update segment count badge
+  els.segmentCount.textContent = `${segments.length} 段`
+  els.segmentCount.hidden = false
+
+  // Auto scroll to the latest segment
+  els.streamingTranscript.scrollTop = els.streamingTranscript.scrollHeight
+}
+
+// Reset streaming transcript
+function resetStreamingTranscript() {
+  displayedSegmentCount = 0
+  els.transcriptSegments.innerHTML = ''
+  els.streamingTranscript.hidden = true
+  els.segmentCount.hidden = true
+}
+
 function resetUI() {
   setDownloadError('')
   setTranscribeError('')
@@ -214,13 +355,21 @@ function resetUI() {
   els.status.textContent = '-'
   setProgress(0)
   els.result.textContent = '尚未生成'
+  els.result.hidden = false
   els.links.hidden = true
   els.srtLink.href = '#'
   els.mdLink.href = '#'
+  els.viewResultLink.href = '#'
   isReadyToTranscribe = false
+  // Don't reset hasDirectAudioUrl here - let user keep their URL
   updateTranscribeButton()
   els.transcribeProgress.hidden = true
   els.logContent.innerHTML = ''
+  resetStreamingTranscript()
+  // Reset file upload status
+  els.fileStatus.hidden = true
+  els.fileLabel.classList.remove('file-selected')
+  els.fileLabelText.textContent = '点击或拖拽上传本地音/视频文件'
 }
 
 function getStatusText(status) {
@@ -261,35 +410,103 @@ async function handleFileUpload() {
   const file = els.file.files && els.file.files[0]
   if (!file) return
 
-  resetUI()
+  // Reset file-specific UI only
   setTranscribeError('')
+  els.fileStatus.hidden = true
+  els.fileLabel.classList.remove('file-selected')
 
   try {
-    els.status.textContent = '上传中...'
+    // Show uploading state
+    els.fileLabelText.textContent = '上传中...'
+
     const task = await uploadTask(file)
     currentTaskId = task.id
-    els.taskId.textContent = currentTaskId
-    els.status.textContent = getStatusText(task.status)
-    setProgress(task.progress)
+
+    // Show file selected status below upload area (not in status card)
+    els.fileLabel.classList.add('file-selected')
+    els.fileLabelText.textContent = '点击或拖拽上传本地音/视频文件'
+    els.fileStatus.hidden = false
+    els.fileStatusText.textContent = `已选定本地文件: ${file.name}`
 
     if (task.status === 'downloaded') {
       isReadyToTranscribe = true
       updateTranscribeButton()
     }
   } catch (e) {
+    els.fileLabelText.textContent = '点击或拖拽上传本地音/视频文件'
     setTranscribeError(String(e.message || e))
   }
 }
 
-async function transcribe() {
-  if (!currentTaskId) {
-    setTranscribeError('请先下载音频或上传文件')
-    return
+// Create task with direct audio URL (skip upload, go straight to transcription)
+async function createDirectUrlTask(audioUrl, provider, modelName, prompt) {
+  const body = {
+    audio_url: audioUrl,
+    provider: provider
   }
+  if (modelName && provider === 'whisper') {
+    body.model_name = modelName
+  }
+  if (prompt && prompt.trim()) {
+    body.prompt = prompt.trim()
+  }
+  const res = await fetch('/tasks/transcribe-url', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+  if (!res.ok) {
+    const msg = await res.text()
+    throw new Error(msg || '转写请求失败')
+  }
+  return res.json()
+}
 
+async function transcribe() {
+  const directUrl = els.directAudioUrl.value.trim()
   const provider = getSelectedProvider()
   const modelName = provider === 'whisper' ? els.whisperModel.value : null
   const prompt = els.customPrompt ? els.customPrompt.value : ''
+
+  // Reset streaming transcript for new transcription
+  resetStreamingTranscript()
+  showTranscriptLoading()
+
+  // If direct URL is provided and no file is uploaded, use direct URL mode
+  if (directUrl && hasDirectAudioUrl && !isReadyToTranscribe) {
+    els.transcribeBtn.disabled = true
+    els.transcribeHint.textContent = '转写进行中...'
+    setTranscribeError('')
+
+    // Show progress section
+    els.transcribeProgress.hidden = false
+    els.transcribeStatus.textContent = '提交转写任务...'
+    setTranscribeProgress(0.3)
+
+    try {
+      const task = await createDirectUrlTask(directUrl, provider, modelName, prompt)
+      currentTaskId = task.id
+      els.taskId.textContent = currentTaskId
+      els.status.textContent = getStatusText(task.status)
+      pollTranscription()
+    } catch (e) {
+      setTranscribeError(String(e.message || e))
+      els.transcribeBtn.disabled = false
+      updateTranscribeButton()
+      els.transcribeProgress.hidden = true
+      resetStreamingTranscript()
+      els.result.hidden = false
+    }
+    return
+  }
+
+  // Normal flow: require existing task
+  if (!currentTaskId) {
+    setTranscribeError('请先下载音频或上传文件')
+    resetStreamingTranscript()
+    els.result.hidden = false
+    return
+  }
 
   els.transcribeBtn.disabled = true
   els.transcribeHint.textContent = '转写进行中...'
@@ -308,6 +525,8 @@ async function transcribe() {
     els.transcribeBtn.disabled = false
     updateTranscribeButton()
     els.transcribeProgress.hidden = true
+    resetStreamingTranscript()
+    els.result.hidden = false
   }
 }
 
@@ -358,19 +577,43 @@ async function pollTranscription() {
       const logs = await fetchLogs(currentTaskId)
       updateLogViewer(logs)
 
-      // Transcription complete - redirect to result page
+      // Update streaming transcript with partial segments
+      if (t.partial_segments && t.partial_segments.length > 0) {
+        updateStreamingTranscript(t.partial_segments)
+      }
+
+      // Transcription complete - show results and enable view button
       if (t.status === 'completed') {
         clearInterval(pollTimer)
         isReadyToTranscribe = false
         els.transcribeBtn.disabled = true
-        els.transcribeHint.textContent = '转写完成！正在跳转...'
+        els.transcribeHint.textContent = '转写完成！'
         els.transcribeHint.style.color = '#2ea043'
         els.transcribeStatus.textContent = '完成！'
 
-        // Redirect to result page after a short delay
-        setTimeout(() => {
-          window.location.href = `/static/result.html?task_id=${currentTaskId}`
-        }, 1000)
+        // Show result links
+        els.srtLink.href = `/artifacts/${currentTaskId}/result.srt`
+        els.mdLink.href = `/artifacts/${currentTaskId}/result.md`
+        els.viewResultLink.href = `/static/result.html?task_id=${currentTaskId}`
+        els.links.hidden = false
+
+        // If we have partial_segments, display them now (final update)
+        if (t.partial_segments && t.partial_segments.length > 0) {
+          updateStreamingTranscript(t.partial_segments)
+        } else {
+          // Fallback: fetch full transcript from result endpoint
+          try {
+            const transcript = await fetch(`/tasks/${currentTaskId}/transcript`)
+            if (transcript.ok) {
+              const data = await transcript.json()
+              if (data.segments && data.segments.length > 0) {
+                updateStreamingTranscript(data.segments)
+              }
+            }
+          } catch (e) {
+            console.log('Could not fetch transcript:', e)
+          }
+        }
       }
 
       // Failed
@@ -380,6 +623,8 @@ async function pollTranscription() {
         isReadyToTranscribe = false
         updateTranscribeButton()
         els.transcribeStatus.textContent = '失败'
+        resetStreamingTranscript()
+        els.result.hidden = false
       }
     } catch (e) {
       clearInterval(pollTimer)
@@ -395,6 +640,10 @@ els.file.addEventListener('change', handleFileUpload)
 els.downloadModelBtn.addEventListener('click', downloadModel)
 els.whisperModel.addEventListener('change', checkModelStatus)
 
+// Direct audio URL input - check on input and blur
+els.directAudioUrl.addEventListener('input', checkDirectAudioUrl)
+els.directAudioUrl.addEventListener('blur', checkDirectAudioUrl)
+
 // Provider radio change
 document.querySelectorAll('input[name="provider"]').forEach(radio => {
   radio.addEventListener('change', toggleProviderOptions)
@@ -403,3 +652,4 @@ document.querySelectorAll('input[name="provider"]').forEach(radio => {
 // Initialize
 toggleProviderOptions()
 checkModelStatus()
+checkDirectAudioUrl()  // Check if URL was pre-filled

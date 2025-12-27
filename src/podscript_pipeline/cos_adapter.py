@@ -49,10 +49,14 @@ def upload_to_cos(cfg: AppConfig, local_file: Path) -> str:
     )
     client = CosS3Client(cos_config)
 
-    # Sanitize filename for COS
+    # Sanitize filename for COS (preserve Chinese and other Unicode characters)
     sanitized = re.sub(r"\s+", "_", local_file.name)
-    sanitized = re.sub(r"[^A-Za-z0-9_.-]", "-", sanitized)
-    object_key = f"tingwu-audio/{sanitized}"
+    # Only remove characters that are problematic for object keys: / \ : * ? " < > | and control chars
+    sanitized = re.sub(r'[/\\:*?"<>|\x00-\x1f]', "-", sanitized)
+
+    # Build object key with optional prefix
+    prefix = (cfg.storage_prefix or "tingwu-audio").strip().strip("/")
+    object_key = f"{prefix}/{sanitized}"
     logger.info(f"upload_to_cos: object_key={object_key}")
 
     content_type = mimetypes.guess_type(sanitized)[0] or "application/octet-stream"

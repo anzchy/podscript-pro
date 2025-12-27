@@ -262,6 +262,7 @@ TINGWU_ENABLED=1
 STORAGE_PROVIDER=oss
 STORAGE_BUCKET=your-oss-bucket
 STORAGE_REGION=cn-shanghai
+# STORAGE_PREFIX=audio/podscript  # 可选：存储路径前缀，默认 tingwu-audio
 
 # 产物目录
 ARTIFACTS_DIR=artifacts
@@ -286,6 +287,7 @@ STORAGE_BUCKET=your-bucket-1250000000
 STORAGE_REGION=ap-shanghai
 TENCENT_SECRET_ID=your-secret-id
 TENCENT_SECRET_KEY=your-secret-key
+# STORAGE_PREFIX=audio/podscript  # 可选：存储路径前缀，默认 tingwu-audio
 
 # 产物目录
 ARTIFACTS_DIR=artifacts
@@ -434,6 +436,7 @@ PYTHONPATH=./src uvicorn ...
 - [阿里云通义听悟](https://help.aliyun.com/zh/tingwu/)
 - [听悟开通指南](https://help.aliyun.com/zh/tingwu/getting-started-1) - 获取 TINGWU_APP_KEY
 - [听悟 OpenAPI 文档](https://next.api.aliyun.com/api/tingwu/2023-09-30/GetTaskInfo?lang=PYTHON)
+- [听悟控制台-用于续费](https://nls-portal.console.aliyun.com/tingwu/overview?spm=a2c4g.11186623.0.0.50194a63hwX7b8)
 - [tingwu SDK](https://github.com/aliyun/alibabacloud-python-sdk/tree/master/tingwu-20230930)
 - [RAM 用户创建](https://help.aliyun.com/zh/ram/user-guide/create-an-accesskey-pair)
 - [OSS 对象存储](https://help.aliyun.com/zh/oss/)

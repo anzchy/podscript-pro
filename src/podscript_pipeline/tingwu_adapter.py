@@ -11,11 +11,91 @@ import datetime
 import mimetypes
 import re
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Callable, TypeVar
 
 from podscript_shared.models import AppConfig
 
 logger = logging.getLogger(__name__)
+
+# Retry configuration
+MAX_RETRIES = 3
+INITIAL_BACKOFF_S = 2  # Initial backoff in seconds
+MAX_BACKOFF_S = 30  # Maximum backoff in seconds
+
+# Error codes that should NOT be retried (business/account errors)
+NON_RETRYABLE_ERROR_CODES = {
+    "BRK.OverdueTenant",  # Account overdue
+    "BRK.InvalidAppKey",  # Invalid AppKey
+    "BRK.NoPermission",  # No permission
+    "InvalidAccessKeyId.NotFound",  # Invalid AccessKey
+    "SignatureDoesNotMatch",  # Invalid signature
+}
+
+T = TypeVar('T')
+
+
+def _is_retryable_error(error: Exception) -> bool:
+    """Check if an error is retryable (transient network/server error)."""
+    error_str = str(error)
+
+    # Check for non-retryable business errors
+    for code in NON_RETRYABLE_ERROR_CODES:
+        if code in error_str:
+            return False
+
+    # Check for HTTP status codes in error message
+    # 4xx errors (except 429) are generally not retryable
+    if "HTTP Status: 4" in error_str and "HTTP Status: 429" not in error_str:
+        return False
+
+    # All other errors are considered retryable (network, timeout, 5xx, etc.)
+    return True
+
+
+def _with_retry(
+    func: Callable[[], T],
+    operation_name: str,
+    max_retries: int = MAX_RETRIES,
+) -> T:
+    """
+    Execute a function with exponential backoff retry.
+
+    Args:
+        func: Function to execute
+        operation_name: Name for logging
+        max_retries: Maximum number of retries
+
+    Returns:
+        Result from the function
+
+    Raises:
+        The last exception if all retries fail
+    """
+    last_exception = None
+    backoff = INITIAL_BACKOFF_S
+
+    for attempt in range(max_retries + 1):
+        try:
+            return func()
+        except Exception as e:
+            last_exception = e
+
+            if attempt >= max_retries:
+                logger.error(f"{operation_name}: All {max_retries + 1} attempts failed")
+                raise
+
+            if not _is_retryable_error(e):
+                logger.error(f"{operation_name}: Non-retryable error, not retrying: {e}")
+                raise
+
+            logger.warning(
+                f"{operation_name}: Attempt {attempt + 1} failed: {e}. "
+                f"Retrying in {backoff}s..."
+            )
+            time.sleep(backoff)
+            backoff = min(backoff * 2, MAX_BACKOFF_S)
+
+    raise last_exception  # Should not reach here
 
 
 def upload_to_oss(cfg: AppConfig, local_file: Path) -> str:
@@ -40,10 +120,14 @@ def upload_to_oss(cfg: AppConfig, local_file: Path) -> str:
     logger.info(f"upload_to_oss: endpoint={endpoint}, bucket={cfg.storage_bucket}")
     bucket = oss2.Bucket(auth, endpoint, cfg.storage_bucket, connect_timeout=60)
 
-    # Sanitize filename for OSS
+    # Sanitize filename for OSS (preserve Chinese and other Unicode characters)
     sanitized = re.sub(r"\s+", "_", local_file.name)
-    sanitized = re.sub(r"[^A-Za-z0-9_.-]", "-", sanitized)
-    object_key = f"tingwu-audio/{sanitized}"
+    # Only remove characters that are problematic for object keys: / \ : * ? " < > | and control chars
+    sanitized = re.sub(r'[/\\:*?"<>|\x00-\x1f]', "-", sanitized)
+
+    # Build object key with optional prefix
+    prefix = (cfg.storage_prefix or "tingwu-audio").strip().strip("/")
+    object_key = f"{prefix}/{sanitized}"
     logger.info(f"upload_to_oss: object_key={object_key}")
 
     content_type = mimetypes.guess_type(sanitized)[0] or "application/octet-stream"
@@ -135,31 +219,42 @@ def submit_transcribe_job(
     }
 
     # Add custom prompt if provided
+    # CustomPrompt format: https://help.aliyun.com/zh/tingwu/custom-prompt
     if custom_prompt:
         body['Parameters']['CustomPromptEnabled'] = True
         body['Parameters']['CustomPrompt'] = {
-            'Content': custom_prompt
+            'Contents': [
+                {
+                    'Name': 'custom_analysis',
+                    'Model': 'tingwu-turbo',  # Options: tingwu-turbo (28k), tingwu-plus (125k), qwen-max (28k)
+                    'Prompt': f'{custom_prompt}\n\n转写内容:\n{{Transcription}}',  # Must include {{Transcription}} placeholder
+                    'TransType': 'chat',  # Options: default, chat (with speaker), sentence-chat
+                }
+            ]
         }
         logger.info(f"submit_transcribe_job: Custom prompt enabled, length={len(custom_prompt)}")
     logger.debug(f"submit_transcribe_job: Request body (without FileUrl): AppKey={cfg.tingwu_app_key[:8] if cfg.tingwu_app_key else 'None'}..., SourceLanguage=cn")
 
-    # Create task request
-    request = _create_common_request('PUT', '/openapi/tingwu/v2/tasks')
-    request.add_query_param('type', 'offline')
-    request.set_content(json.dumps(body).encode('utf-8'))
+    # Create task request with retry logic
+    def _submit_request() -> str:
+        request = _create_common_request('PUT', '/openapi/tingwu/v2/tasks')
+        request.add_query_param('type', 'offline')
+        request.set_content(json.dumps(body).encode('utf-8'))
 
-    logger.info("submit_transcribe_job: Sending CreateTask request to Tingwu API...")
-    response = client.do_action_with_exception(request)
-    result = json.loads(response)
-    logger.info(f"submit_transcribe_job: Response Code={result.get('Code')}, Message={result.get('Message')}")
+        logger.info("submit_transcribe_job: Sending CreateTask request to Tingwu API...")
+        response = client.do_action_with_exception(request)
+        result = json.loads(response)
+        logger.info(f"submit_transcribe_job: Response Code={result.get('Code')}, Message={result.get('Message')}")
 
-    if result.get('Code') != '0' and result.get('Code') != 0:
-        logger.error(f"submit_transcribe_job: CreateTask failed: {result}")
-        raise RuntimeError(f"Tingwu CreateTask failed: {result.get('Message', result)}")
+        if result.get('Code') != '0' and result.get('Code') != 0:
+            logger.error(f"submit_transcribe_job: CreateTask failed: {result}")
+            raise RuntimeError(f"Tingwu CreateTask failed: {result.get('Message', result)}")
 
-    task_id = result['Data']['TaskId']
-    logger.info(f"submit_transcribe_job: Task created successfully, task_id={task_id}")
-    return task_id
+        task_id = result['Data']['TaskId']
+        logger.info(f"submit_transcribe_job: Task created successfully, task_id={task_id}")
+        return task_id
+
+    return _with_retry(_submit_request, "submit_transcribe_job")
 
 
 def poll_transcribe_result(cfg: AppConfig, task_id: str, timeout_s: int = 600) -> Dict[str, Any]:
@@ -181,11 +276,8 @@ def poll_transcribe_result(cfg: AppConfig, task_id: str, timeout_s: int = 600) -
     start = time.time()
     poll_count = 0
 
-    while time.time() - start < timeout_s:
-        poll_count += 1
-        elapsed = int(time.time() - start)
-        logger.info(f"poll_transcribe_result: Poll #{poll_count}, elapsed={elapsed}s")
-
+    def _poll_once() -> Dict[str, Any]:
+        """Single poll request with retry."""
         request = _create_common_request('GET', f'/openapi/tingwu/v2/tasks/{task_id}')
         response = client.do_action_with_exception(request)
         result = json.loads(response)
@@ -193,6 +285,27 @@ def poll_transcribe_result(cfg: AppConfig, task_id: str, timeout_s: int = 600) -
         if result.get('Code') != '0' and result.get('Code') != 0:
             logger.error(f"poll_transcribe_result: GetTask failed: {result}")
             raise RuntimeError(f"Tingwu GetTask failed: {result.get('Message', result)}")
+
+        return result
+
+    def _fetch_transcription(url: str) -> Dict[str, Any]:
+        """Fetch transcription JSON with retry."""
+        logger.info("poll_transcribe_result: Fetching transcription JSON from URL...")
+        resp = httpx.get(url, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+
+    while time.time() - start < timeout_s:
+        poll_count += 1
+        elapsed = int(time.time() - start)
+        logger.info(f"poll_transcribe_result: Poll #{poll_count}, elapsed={elapsed}s")
+
+        # Poll with retry
+        result = _with_retry(
+            _poll_once,
+            f"poll_transcribe_result (poll #{poll_count})",
+            max_retries=2  # Fewer retries for individual polls
+        )
 
         task_status = result['Data'].get('TaskStatus', '')
         logger.info(f"poll_transcribe_result: TaskStatus={task_status}")
@@ -203,11 +316,11 @@ def poll_transcribe_result(cfg: AppConfig, task_id: str, timeout_s: int = 600) -
             transcription_url = result['Data'].get('Result', {}).get('Transcription')
             logger.info(f"poll_transcribe_result: Transcription URL exists={bool(transcription_url)}")
             if transcription_url:
-                # Fetch the actual transcription JSON
-                logger.info("poll_transcribe_result: Fetching transcription JSON from URL...")
-                resp = httpx.get(transcription_url, timeout=30)
-                resp.raise_for_status()
-                transcription_data = resp.json()
+                # Fetch the actual transcription JSON with retry
+                transcription_data = _with_retry(
+                    lambda: _fetch_transcription(transcription_url),
+                    "fetch_transcription_json"
+                )
                 logger.info(f"poll_transcribe_result: Transcription data fetched, keys={list(transcription_data.keys())}")
                 return _parse_transcription(transcription_data)
             logger.warning("poll_transcribe_result: No transcription URL in result, returning empty")
