@@ -1,0 +1,303 @@
+openapi: 3.0.3
+info:
+  title: Podscript History API
+  description: 转写历史记录管理接口
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8001
+    description: Local development server
+
+paths:
+  /history:
+    get:
+      summary: 获取历史记录列表
+      description: 分页获取转写历史记录，默认过滤已删除的记录
+      operationId: getHistory
+      tags:
+        - History
+      parameters:
+        - name: page
+          in: query
+          description: 页码
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: 每页记录数
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          description: 按状态过滤
+          schema:
+            type: string
+            enum: [pending, downloading, downloaded, processing, completed, failed, deleted]
+      responses:
+        '200':
+          description: 成功返回历史记录列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryListResponse'
+              example:
+                total: 16
+                page: 1
+                limit: 20
+                records:
+                  - task_id: "abc123def456"
+                    title: "对投资人朱啸虎的访谈"
+                    source_url: "https://youtube.com/watch?v=xxx"
+                    source_type: "youtube"
+                    media_type: "video"
+                    duration: 2786
+                    file_size: 192937984
+                    tags: ["AI", "泡沫", "投资"]
+                    created_at: "2025-12-16T08:20:00Z"
+                    viewed: true
+                    thumbnail_url: "/artifacts/abc123def456/thumbnail.jpg"
+                    status: "completed"
+
+  /history/{task_id}:
+    get:
+      summary: 获取单条历史记录详情
+      operationId: getHistoryRecord
+      tags:
+        - History
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: 任务 ID
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{12}$'
+      responses:
+        '200':
+          description: 成功返回记录详情
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoryRecord'
+        '404':
+          description: 记录不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    patch:
+      summary: 更新历史记录
+      description: 更新记录的 viewed 状态或 tags
+      operationId: updateHistoryRecord
+      tags:
+        - History
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: 任务 ID
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{12}$'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HistoryUpdateRequest'
+            example:
+              viewed: true
+              tags: ["AI", "投资", "访谈"]
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: 记录不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: 删除历史记录
+      description: 软删除记录（标记为 deleted 状态）
+      operationId: deleteHistoryRecord
+      tags:
+        - History
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          description: 任务 ID
+          schema:
+            type: string
+            pattern: '^[a-f0-9]{12}$'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '404':
+          description: 记录不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    SourceType:
+      type: string
+      enum: [youtube, upload, url]
+      description: 来源类型
+
+    MediaType:
+      type: string
+      enum: [video, audio]
+      description: 媒体类型
+
+    TaskStatus:
+      type: string
+      enum: [pending, downloading, downloaded, processing, completed, failed, deleted]
+      description: 任务状态
+
+    HistoryRecord:
+      type: object
+      required:
+        - task_id
+        - title
+        - source_type
+        - media_type
+        - duration
+        - file_size
+        - created_at
+        - viewed
+        - status
+      properties:
+        task_id:
+          type: string
+          pattern: '^[a-f0-9]{12}$'
+          description: 唯一任务标识符
+          example: "abc123def456"
+        title:
+          type: string
+          maxLength: 200
+          description: 任务标题
+          example: "对投资人朱啸虎的访谈"
+        source_url:
+          type: string
+          nullable: true
+          description: 原始 URL
+          example: "https://youtube.com/watch?v=xxx"
+        source_type:
+          $ref: '#/components/schemas/SourceType'
+        media_type:
+          $ref: '#/components/schemas/MediaType'
+        duration:
+          type: integer
+          minimum: 0
+          description: 时长（秒）
+          example: 2786
+        file_size:
+          type: integer
+          minimum: 0
+          description: 文件大小（字节）
+          example: 192937984
+        tags:
+          type: array
+          items:
+            type: string
+            maxLength: 20
+          maxItems: 10
+          description: 关键词标签
+          example: ["AI", "泡沫", "投资"]
+        created_at:
+          type: string
+          format: date-time
+          description: 创建时间
+          example: "2025-12-16T08:20:00Z"
+        viewed:
+          type: boolean
+          description: 是否已查看
+          example: true
+        thumbnail_url:
+          type: string
+          nullable: true
+          description: 缩略图路径
+          example: "/artifacts/abc123def456/thumbnail.jpg"
+        status:
+          $ref: '#/components/schemas/TaskStatus'
+
+    HistoryListResponse:
+      type: object
+      required:
+        - total
+        - page
+        - limit
+        - records
+      properties:
+        total:
+          type: integer
+          description: 总记录数
+          example: 16
+        page:
+          type: integer
+          description: 当前页码
+          example: 1
+        limit:
+          type: integer
+          description: 每页记录数
+          example: 20
+        records:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoryRecord'
+
+    HistoryUpdateRequest:
+      type: object
+      properties:
+        viewed:
+          type: boolean
+          description: 是否已查看
+        tags:
+          type: array
+          items:
+            type: string
+            maxLength: 20
+          maxItems: 10
+          description: 关键词标签
+
+    SuccessResponse:
+      type: object
+      required:
+        - success
+      properties:
+        success:
+          type: boolean
+          example: true
+
+    ErrorResponse:
+      type: object
+      required:
+        - detail
+      properties:
+        detail:
+          type: string
+          description: 错误信息
+          example: "Record not found"
+
+tags:
+  - name: History
+    description: 历史记录管理接口

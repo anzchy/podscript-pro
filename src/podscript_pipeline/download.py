@@ -8,6 +8,24 @@ def _is_youtube(url: str) -> bool:
     return ("youtube.com/watch" in u) or ("youtu.be/" in u)
 
 
+def _download_thumbnail(info: dict, task_dir: Path) -> None:
+    """Download YouTube thumbnail image (T041)."""
+    try:
+        import urllib.request
+
+        thumbnail_url = info.get("thumbnail")
+        if not thumbnail_url:
+            thumbnails = info.get("thumbnails", [])
+            if thumbnails:
+                thumbnail_url = thumbnails[-1].get("url")  # Highest quality
+
+        if thumbnail_url:
+            thumbnail_path = task_dir / "thumbnail.jpg"
+            urllib.request.urlretrieve(thumbnail_url, thumbnail_path)
+    except Exception as e:
+        print(f"Thumbnail download failed (non-fatal): {e}")
+
+
 def download_source(task_id: str, source_url: str, artifacts_dir: str) -> Tuple[Path, str]:
     task_dir = Path(artifacts_dir) / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
@@ -43,6 +61,10 @@ def download_source(task_id: str, source_url: str, artifacts_dir: str) -> Tuple[
                 info = ydl.extract_info(source_url, download=True)
                 base = ydl.prepare_filename(info)
                 audio_path = Path(base).with_suffix(".mp3")
+
+                # Download thumbnail (T041)
+                _download_thumbnail(info, task_dir)
+
                 if audio_path.exists():
                     return audio_path, "audio/mpeg"
         except Exception as e:
