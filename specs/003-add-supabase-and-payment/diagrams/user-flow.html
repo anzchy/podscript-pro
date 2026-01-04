@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podscript 用户流程图</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 28px;
+            color: #fff;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 40px;
+            font-size: 14px;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        .legend-shape {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+        }
+
+        .legend-shape.start { background: #10b981; border-radius: 50%; }
+        .legend-shape.page { background: #3b82f6; }
+        .legend-shape.decision { background: #f59e0b; transform: rotate(45deg); width: 18px; height: 18px; }
+        .legend-shape.action { background: #8b5cf6; border-radius: 8px; }
+        .legend-shape.external { background: #ef4444; border-radius: 4px; border: 2px dashed #ef4444; background: transparent; }
+
+        .flowchart {
+            position: relative;
+            padding: 20px;
+        }
+
+        /* Flow Section */
+        .flow-section {
+            margin-bottom: 60px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            color: #3b82f6;
+            margin-bottom: 20px;
+            padding-left: 12px;
+            border-left: 3px solid #3b82f6;
+        }
+
+        .flow-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .flow-row.centered {
+            justify-content: center;
+        }
+
+        /* Nodes */
+        .node {
+            padding: 16px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            text-align: center;
+            min-width: 140px;
+            position: relative;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .node:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+        }
+
+        .node.start {
+            background: linear-gradient(135deg, #10b981, #059669);
+            border-radius: 50px;
+            min-width: 120px;
+        }
+
+        .node.end {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            border-radius: 50px;
+            min-width: 120px;
+        }
+
+        .node.page {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+        }
+
+        .node.decision {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            border-radius: 4px;
+            padding: 20px 30px;
+        }
+
+        .node.action {
+            background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+            border-radius: 12px;
+        }
+
+        .node.external {
+            background: transparent;
+            border: 2px dashed #ef4444;
+            color: #ef4444;
+        }
+
+        .node.api {
+            background: linear-gradient(135deg, #06b6d4, #0891b2);
+            border-radius: 4px;
+            font-size: 12px;
+            padding: 12px 16px;
+            min-width: 100px;
+        }
+
+        .node-label {
+            font-size: 11px;
+            color: rgba(255,255,255,0.7);
+            margin-top: 4px;
+        }
+
+        /* Arrows */
+        .arrow {
+            display: flex;
+            align-items: center;
+            color: #666;
+            font-size: 12px;
+            gap: 4px;
+        }
+
+        .arrow-line {
+            width: 40px;
+            height: 2px;
+            background: #444;
+            position: relative;
+        }
+
+        .arrow-line::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: -4px;
+            border: 5px solid transparent;
+            border-left-color: #444;
+        }
+
+        .arrow-down {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: #666;
+            font-size: 11px;
+            margin: 10px 0;
+        }
+
+        .arrow-down-line {
+            width: 2px;
+            height: 30px;
+            background: #444;
+            position: relative;
+        }
+
+        .arrow-down-line::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: -4px;
+            border: 5px solid transparent;
+            border-top-color: #444;
+        }
+
+        .arrow-label {
+            background: #2a2a3e;
+            padding: 2px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        /* Branch container */
+        .branch-container {
+            display: flex;
+            gap: 40px;
+            margin-top: 20px;
+        }
+
+        .branch {
+            flex: 1;
+            padding: 20px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .branch-title {
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+
+        /* Vertical flow */
+        .vertical-flow {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Complete flow diagram */
+        .complete-flow {
+            background: rgba(255,255,255,0.02);
+            border-radius: 16px;
+            padding: 30px;
+            margin-top: 40px;
+        }
+
+        .complete-flow h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #fff;
+            font-size: 20px;
+        }
+
+        /* Grid layout for main flows */
+        .flow-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+        }
+
+        .flow-card {
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            padding: 24px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .flow-card h3 {
+            font-size: 16px;
+            margin-bottom: 20px;
+            color: #3b82f6;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .flow-card h3 .step-num {
+            background: #3b82f6;
+            color: #fff;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        /* Detailed steps */
+        .step-list {
+            list-style: none;
+        }
+
+        .step-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .step-list li:last-child {
+            margin-bottom: 0;
+        }
+
+        .step-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .step-icon.visit { background: #10b981; }
+        .step-icon.check { background: #f59e0b; }
+        .step-icon.redirect { background: #3b82f6; }
+        .step-icon.auth { background: #8b5cf6; }
+        .step-icon.pay { background: #ef4444; }
+        .step-icon.success { background: #10b981; }
+        .step-icon.use { background: #06b6d4; }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .step-content strong {
+            color: #fff;
+        }
+
+        .step-content .route {
+            display: inline-block;
+            background: rgba(59, 130, 246, 0.2);
+            color: #3b82f6;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 0 4px;
+        }
+
+        /* Notes */
+        .notes {
+            margin-top: 40px;
+            padding: 20px;
+            background: rgba(59, 130, 246, 0.1);
+            border-radius: 12px;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .notes h3 {
+            margin-bottom: 12px;
+            color: #3b82f6;
+        }
+
+        .notes ul {
+            list-style: none;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 10px;
+        }
+
+        .notes li {
+            font-size: 13px;
+            color: #aaa;
+            padding-left: 20px;
+            position: relative;
+        }
+
+        .notes li::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: #3b82f6;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Podscript 用户流程图</h1>
+        <p class="subtitle">User Flow Diagram - Authentication & Payment Journey</p>
+
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-shape start"></div>
+                <span>开始/结束</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-shape page"></div>
+                <span>页面</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-shape decision"></div>
+                <span>判断</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-shape action"></div>
+                <span>操作</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-shape external"></div>
+                <span>外部服务</span>
+            </div>
+        </div>
+
+        <!-- Main Flow Diagram -->
+        <div class="complete-flow">
+            <h2>完整用户旅程</h2>
+
+            <div class="flow-grid">
+                <!-- Flow 1: First Visit -->
+                <div class="flow-card">
+                    <h3><span class="step-num">1</span>首次访问</h3>
+                    <ul class="step-list">
+                        <li>
+                            <div class="step-icon visit">🌐</div>
+                            <div class="step-content">
+                                用户访问 <span class="route">/</span> 首页
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon check">❓</div>
+                            <div class="step-content">
+                                <strong>检查登录状态</strong><br>
+                                系统检测 JWT Token 是否有效
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon redirect">➡️</div>
+                            <div class="step-content">
+                                <strong>未登录</strong> → 重定向到 <span class="route">/login</span><br>
+                                <strong>已登录</strong> → 显示首页（含用户信息和积分）
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Flow 2: Registration -->
+                <div class="flow-card">
+                    <h3><span class="step-num">2</span>新用户注册</h3>
+                    <ul class="step-list">
+                        <li>
+                            <div class="step-icon visit">📝</div>
+                            <div class="step-content">
+                                用户在 <span class="route">/login</span> 点击「注册」标签
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon auth">🔐</div>
+                            <div class="step-content">
+                                <strong>填写邮箱和密码</strong><br>
+                                提交到 Supabase Auth
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon success">🎁</div>
+                            <div class="step-content">
+                                <strong>注册成功</strong><br>
+                                自动获得 10 积分（10小时免费转写）
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon redirect">➡️</div>
+                            <div class="step-content">
+                                重定向到 <span class="route">/</span> 首页
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Flow 3: Login -->
+                <div class="flow-card">
+                    <h3><span class="step-num">3</span>用户登录</h3>
+                    <ul class="step-list">
+                        <li>
+                            <div class="step-icon visit">🔑</div>
+                            <div class="step-content">
+                                用户在 <span class="route">/login</span> 输入凭据
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon auth">✅</div>
+                            <div class="step-content">
+                                <strong>验证成功</strong> → Supabase 返回 JWT<br>
+                                Token 存储到 Cookie
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon redirect">➡️</div>
+                            <div class="step-content">
+                                重定向到 <span class="route">/</span> 首页<br>
+                                显示用户邮箱和积分余额
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Flow 4: Recharge -->
+                <div class="flow-card">
+                    <h3><span class="step-num">4</span>积分充值</h3>
+                    <ul class="step-list">
+                        <li>
+                            <div class="step-icon visit">💰</div>
+                            <div class="step-content">
+                                用户点击首页「充值」或访问 <span class="route">/credits</span>
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon use">🎯</div>
+                            <div class="step-content">
+                                <strong>选择充值金额</strong><br>
+                                预设：10元 / 50元 / 100元<br>
+                                或输入自定义金额（最低1元）
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon pay">💳</div>
+                            <div class="step-content">
+                                点击「立即支付」<br>
+                                跳转到 <strong>Z-Pay 支付页面</strong>（外部）
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Flow 5: Payment -->
+                <div class="flow-card">
+                    <h3><span class="step-num">5</span>支付流程</h3>
+                    <ul class="step-list">
+                        <li>
+                            <div class="step-icon pay">📱</div>
+                            <div class="step-content">
+                                <strong>Z-Pay 支付页面</strong><br>
+                                用户选择微信/支付宝扫码支付
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon check">❓</div>
+                            <div class="step-content">
+                                <strong>支付结果</strong><br>
+                                成功 → Z-Pay 发送 Webhook 回调<br>
+                                失败 → 返回充值页面
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon success">✅</div>
+                            <div class="step-content">
+                                <strong>支付成功</strong><br>
+                                后端验证签名，更新积分余额
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon redirect">➡️</div>
+                            <div class="step-content">
+                                跳转到 <span class="route">/payment-success</span><br>
+                                显示充值成功信息
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Flow 6: Transcription -->
+                <div class="flow-card">
+                    <h3><span class="step-num">6</span>转写服务</h3>
+                    <ul class="step-list">
+                        <li>
+                            <div class="step-icon visit">🎙️</div>
+                            <div class="step-content">
+                                用户在首页上传音视频或输入URL
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon check">❓</div>
+                            <div class="step-content">
+                                <strong>积分检查</strong><br>
+                                计算所需积分（1积分/小时，向上取整）
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon pay">💎</div>
+                            <div class="step-content">
+                                <strong>积分不足</strong> → 提示充值<br>
+                                <strong>积分充足</strong> → 扣除积分，开始转写
+                            </div>
+                        </li>
+                        <li>
+                            <div class="step-icon success">📄</div>
+                            <div class="step-content">
+                                转写完成 → 显示 <span class="route">/result</span><br>
+                                可下载 SRT/Markdown 文件
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visual Flow -->
+        <div class="complete-flow" style="margin-top: 40px;">
+            <h2>页面跳转关系图</h2>
+
+            <div class="flow-section">
+                <div class="flow-row centered">
+                    <div class="node start">🌐 用户访问</div>
+                    <div class="arrow">
+                        <div class="arrow-line"></div>
+                    </div>
+                    <div class="node page">/ 首页</div>
+                    <div class="arrow">
+                        <span class="arrow-label">未登录</span>
+                        <div class="arrow-line"></div>
+                    </div>
+                    <div class="node page">/login 登录页</div>
+                </div>
+
+                <div class="branch-container">
+                    <!-- Login Branch -->
+                    <div class="branch">
+                        <div class="branch-title">登录流程</div>
+                        <div class="vertical-flow">
+                            <div class="node action">输入邮箱密码</div>
+                            <div class="arrow-down">
+                                <div class="arrow-down-line"></div>
+                            </div>
+                            <div class="node api">Supabase Auth</div>
+                            <div class="arrow-down">
+                                <span class="arrow-label">验证成功</span>
+                                <div class="arrow-down-line"></div>
+                            </div>
+                            <div class="node page">/ 首页（已登录）</div>
+                        </div>
+                    </div>
+
+                    <!-- Register Branch -->
+                    <div class="branch">
+                        <div class="branch-title">注册流程</div>
+                        <div class="vertical-flow">
+                            <div class="node action">填写注册信息</div>
+                            <div class="arrow-down">
+                                <div class="arrow-down-line"></div>
+                            </div>
+                            <div class="node api">Supabase Auth</div>
+                            <div class="arrow-down">
+                                <span class="arrow-label">+10积分</span>
+                                <div class="arrow-down-line"></div>
+                            </div>
+                            <div class="node page">/ 首页（已登录）</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flow-section" style="margin-top: 40px;">
+                <div class="section-title">充值与支付流程</div>
+                <div class="flow-row centered">
+                    <div class="node page">/ 首页</div>
+                    <div class="arrow">
+                        <span class="arrow-label">点击充值</span>
+                        <div class="arrow-line"></div>
+                    </div>
+                    <div class="node page">/credits 充值页</div>
+                    <div class="arrow">
+                        <span class="arrow-label">选择金额</span>
+                        <div class="arrow-line"></div>
+                    </div>
+                    <div class="node external">Z-Pay 支付</div>
+                    <div class="arrow">
+                        <span class="arrow-label">支付成功</span>
+                        <div class="arrow-line"></div>
+                    </div>
+                    <div class="node page">/payment-success</div>
+                </div>
+                <div class="flow-row centered" style="margin-top: 20px;">
+                    <div class="node page">/payment-success</div>
+                    <div class="arrow">
+                        <span class="arrow-label">3秒后</span>
+                        <div class="arrow-line"></div>
+                    </div>
+                    <div class="node page">/ 首页</div>
+                    <div class="arrow">
+                        <span class="arrow-label">或点击「继续充值」</span>
+                        <div class="arrow-line"></div>
+                    </div>
+                    <div class="node page">/credits 充值页</div>
+                </div>
+            </div>
+
+            <div class="flow-section" style="margin-top: 40px;">
+                <div class="section-title">转写服务流程</div>
+                <div class="flow-row centered">
+                    <div class="node page">/ 首页</div>
+                    <div class="arrow">
+                        <span class="arrow-label">上传/输入URL</span>
+                        <div class="arrow-line"></div>
+                    </div>
+                    <div class="node decision">积分检查</div>
+                </div>
+                <div class="branch-container">
+                    <div class="branch">
+                        <div class="branch-title">积分充足</div>
+                        <div class="vertical-flow">
+                            <div class="node action">扣除积分</div>
+                            <div class="arrow-down">
+                                <div class="arrow-down-line"></div>
+                            </div>
+                            <div class="node action">开始转写</div>
+                            <div class="arrow-down">
+                                <div class="arrow-down-line"></div>
+                            </div>
+                            <div class="node page">/result 结果页</div>
+                        </div>
+                    </div>
+                    <div class="branch">
+                        <div class="branch-title">积分不足</div>
+                        <div class="vertical-flow">
+                            <div class="node action">提示「积分不足」</div>
+                            <div class="arrow-down">
+                                <span class="arrow-label">点击充值</span>
+                                <div class="arrow-down-line"></div>
+                            </div>
+                            <div class="node page">/credits 充值页</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notes -->
+        <div class="notes">
+            <h3>关键设计说明</h3>
+            <ul>
+                <li><strong>登录态检查</strong>：所有页面加载时检查 JWT Token，未登录自动跳转登录页</li>
+                <li><strong>支付回调</strong>：Z-Pay 通过 Webhook 通知后端，前端通过 return_url 跳转</li>
+                <li><strong>积分扣除时机</strong>：转写开始时扣除，非完成后扣除（防止逃费）</li>
+                <li><strong>会话保持</strong>：使用 Refresh Token 机制，关闭浏览器后仍保持登录</li>
+                <li><strong>历史记录</strong>：/history 页面仅显示当前用户的转写记录（RLS 隔离）</li>
+                <li><strong>支付成功页</strong>：显示充值金额和新余额，3秒后自动返回首页</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

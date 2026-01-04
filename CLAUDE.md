@@ -135,6 +135,8 @@ Optional:
 ## Active Technologies
 - Python 3.10-3.12 + FastAPI, Pydantic, yt-dlp, openai-whisper (002-add-transcribe-history)
 - JSON 文件 (`artifacts/history.json`) + 任务目录 (`artifacts/{task_id}/`) (002-add-transcribe-history)
+- Python 3.10-3.12 (per pyproject.toml) + FastAPI 0.115+, Pydantic 2.8+, Supabase Python SDK (new), httpx (003-add-supabase-and-payment)
+- Supabase PostgreSQL (new - users_credits, credit_transactions, payment_orders tables) (003-add-supabase-and-payment)
 
 ## Recent Changes
 - 002-add-transcribe-history: Added Python 3.10-3.12 + FastAPI, Pydantic, yt-dlp, openai-whisper

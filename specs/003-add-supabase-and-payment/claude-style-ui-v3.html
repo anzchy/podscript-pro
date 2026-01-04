@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Podscript - UI Prototype v3 (Auth + Payment)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        .page { display: none; }
+        .page.active { display: block; }
+        .tab-btn.active { border-bottom: 2px solid #DA7756; color: #141413; }
+        .amount-btn.selected { background-color: #DA7756 !important; color: white !important; border-color: #DA7756 !important; }
+    </style>
+</head>
+<body class="min-h-screen" style="background-color: #FAF9F5; font-family: 'Inter', system-ui, sans-serif; color: #30302E;">
+
+    <!-- Navigation Tabs -->
+    <div class="fixed top-0 left-0 right-0 z-50 border-b" style="background-color: #191918; border-color: #333;">
+        <div class="max-w-6xl mx-auto px-4 py-2 flex gap-4">
+            <button onclick="showPage('home')" class="text-sm px-3 py-1 rounded" style="color: #FAF9F5; background-color: rgba(218,119,86,0.2);">首页</button>
+            <button onclick="showPage('login')" class="text-sm px-3 py-1 rounded" style="color: rgba(250,249,245,0.7);">登录页</button>
+            <button onclick="showPage('credits')" class="text-sm px-3 py-1 rounded" style="color: rgba(250,249,245,0.7);">充值页</button>
+            <button onclick="showPage('payment-success')" class="text-sm px-3 py-1 rounded" style="color: rgba(250,249,245,0.7);">支付成功</button>
+            <span class="ml-auto text-xs" style="color: rgba(250,249,245,0.5);">UI Prototype v3 - Auth + Payment</span>
+        </div>
+    </div>
+
+    <!-- ==================== HOME PAGE ==================== -->
+    <div id="page-home" class="page active" style="padding-top: 48px;">
+        <!-- Header -->
+        <header class="sticky top-12 z-40 border-b" style="background-color: #FAF9F5; border-color: #E8E6DC;">
+            <div class="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 flex items-center justify-center" style="background-color: #DA7756; border-radius: 0 8px 8px 8px;">
+                        <i data-lucide="mic" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <span class="text-xl font-medium tracking-tight" style="font-family: Georgia, serif; color: #141413;">Podscript</span>
+                </div>
+
+                <!-- Auth Status: Logged In -->
+                <div class="flex items-center gap-4">
+                    <a href="#" onclick="showPage('credits')" class="flex items-center gap-2 px-3 py-1.5 rounded-lg transition-colors" style="background-color: rgba(218,119,86,0.1);">
+                        <i data-lucide="coins" class="w-4 h-4" style="color: #DA7756;"></i>
+                        <span class="text-sm font-medium" style="color: #DA7756;">56 积分</span>
+                    </a>
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white" style="background-color: #6366f1;">J</div>
+                        <span class="text-sm" style="color: #5E5D59;">jack@example.com</span>
+                        <button class="text-sm px-2 py-1 rounded" style="color: #8A8985;">退出</button>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-3xl mx-auto px-6 py-8 space-y-6">
+            <!-- Hero Section -->
+            <div class="text-center py-8">
+                <h1 class="text-4xl md:text-5xl font-medium tracking-tight mb-4" style="font-family: Georgia, serif; color: #141413;">
+                    音视频转写工具
+                </h1>
+                <p class="text-lg" style="color: #5E5D59; line-height: 1.6;">
+                    输入 YouTube 链接或上传音频文件，获取精准的文字转写结果
+                </p>
+            </div>
+
+            <!-- Step 1: Download Audio -->
+            <section class="p-6 md:p-8 transition-all duration-200" style="background-color: #F5F4F0; border-radius: 0 24px 24px 24px;">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-8 h-8 flex items-center justify-center text-sm font-semibold text-white" style="background-color: #141413; border-radius: 50%;">1</div>
+                    <h2 class="text-xl font-medium tracking-tight" style="color: #141413;">下载音频</h2>
+                </div>
+                <label class="block text-sm font-medium mb-2" style="color: #5E5D59;">YouTube 链接</label>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="flex-1 relative">
+                        <i data-lucide="link" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style="color: #8A8985;"></i>
+                        <input type="url" placeholder="https://www.youtube.com/watch?v=..." class="w-full pl-11 pr-4 py-3 text-base border outline-none" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px; color: #141413;">
+                    </div>
+                    <button class="px-6 py-3 font-medium text-white flex items-center justify-center gap-2" style="background-color: #141413; border-radius: 12px;">
+                        <i data-lucide="download" class="w-4 h-4"></i>
+                        开始下载
+                    </button>
+                </div>
+            </section>
+
+            <!-- Step 2: Transcription -->
+            <section class="p-6 md:p-8 transition-all duration-200" style="background-color: #F5F4F0; border-radius: 0 24px 24px 24px;">
+                <div class="flex items-center gap-3 mb-6">
+                    <div class="w-8 h-8 flex items-center justify-center text-sm font-semibold text-white" style="background-color: #141413; border-radius: 50%;">2</div>
+                    <h2 class="text-xl font-medium tracking-tight" style="color: #141413;">开始转写</h2>
+                    <span class="ml-auto text-sm px-2 py-1 rounded" style="background-color: rgba(218,119,86,0.1); color: #DA7756;">消耗 1 积分/分钟</span>
+                </div>
+
+                <div class="mb-6 p-4 border-2 border-dashed text-center cursor-pointer" style="border-color: #E8E6DC; border-radius: 16px; background-color: #FAF9F5;">
+                    <i data-lucide="upload-cloud" class="w-8 h-8 mx-auto mb-2" style="color: #8A8985;"></i>
+                    <span class="text-sm font-medium" style="color: #5E5D59;">点击或拖拽上传本地音/视频文件</span>
+                </div>
+
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                    <button class="px-8 py-3 font-medium text-white flex items-center gap-2" style="background-color: #DA7756; border-radius: 12px;">
+                        <i data-lucide="play" class="w-4 h-4"></i>
+                        开始转写
+                    </button>
+                    <p class="text-sm" style="color: #5E5D59;">当前余额: 56 积分</p>
+                </div>
+            </section>
+
+            <!-- Results Card -->
+            <section class="p-6 md:p-8" style="background-color: #F5F4F0; border-radius: 16px 0 16px 16px;">
+                <div class="flex items-center gap-3 mb-6">
+                    <i data-lucide="file-text" class="w-5 h-5" style="color: #DA7756;"></i>
+                    <h2 class="text-xl font-medium tracking-tight" style="color: #141413;">转写结果</h2>
+                </div>
+                <div class="p-4 text-sm overflow-y-auto max-h-96 whitespace-pre-wrap" style="background-color: #FAF9F5; border-radius: 12px; color: #30302E; line-height: 1.6; min-height: 120px;">尚未生成</div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ==================== LOGIN PAGE ==================== -->
+    <div id="page-login" class="page" style="padding-top: 48px;">
+        <header class="sticky top-12 z-40 border-b" style="background-color: #FAF9F5; border-color: #E8E6DC;">
+            <div class="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+                <a href="#" onclick="showPage('home')" class="flex items-center gap-2">
+                    <div class="w-8 h-8 flex items-center justify-center" style="background-color: #DA7756; border-radius: 0 8px 8px 8px;">
+                        <i data-lucide="mic" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <span class="text-xl font-medium tracking-tight" style="font-family: Georgia, serif; color: #141413;">Podscript</span>
+                </a>
+            </div>
+        </header>
+
+        <main class="max-w-md mx-auto px-6 py-16">
+            <div class="p-8" style="background-color: #F5F4F0; border-radius: 24px;">
+                <!-- Tabs -->
+                <div class="flex border-b mb-6" style="border-color: #E8E6DC;">
+                    <button class="tab-btn active flex-1 py-3 text-center text-sm font-medium" style="color: #5E5D59;" onclick="switchLoginTab('login')">登录</button>
+                    <button class="tab-btn flex-1 py-3 text-center text-sm font-medium" style="color: #5E5D59;" onclick="switchLoginTab('register')">注册</button>
+                </div>
+
+                <!-- Login Form -->
+                <div id="login-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2" style="color: #5E5D59;">邮箱</label>
+                        <div class="relative">
+                            <i data-lucide="mail" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style="color: #8A8985;"></i>
+                            <input type="email" placeholder="you@example.com" class="w-full pl-11 pr-4 py-3 text-base border outline-none" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px; color: #141413;">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2" style="color: #5E5D59;">密码</label>
+                        <div class="relative">
+                            <i data-lucide="lock" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style="color: #8A8985;"></i>
+                            <input type="password" placeholder="••••••••" class="w-full pl-11 pr-4 py-3 text-base border outline-none" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px; color: #141413;">
+                        </div>
+                    </div>
+                    <button class="w-full py-3 font-medium text-white" style="background-color: #DA7756; border-radius: 12px;">
+                        登录
+                    </button>
+                    <p class="text-center text-sm" style="color: #8A8985;">
+                        还没有账户? <a href="#" onclick="switchLoginTab('register')" style="color: #DA7756;">立即注册</a>
+                    </p>
+                </div>
+
+                <!-- Register Form -->
+                <div id="register-form" class="space-y-4 hidden">
+                    <div>
+                        <label class="block text-sm font-medium mb-2" style="color: #5E5D59;">邮箱</label>
+                        <div class="relative">
+                            <i data-lucide="mail" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style="color: #8A8985;"></i>
+                            <input type="email" placeholder="you@example.com" class="w-full pl-11 pr-4 py-3 text-base border outline-none" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px; color: #141413;">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2" style="color: #5E5D59;">密码</label>
+                        <div class="relative">
+                            <i data-lucide="lock" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style="color: #8A8985;"></i>
+                            <input type="password" placeholder="至少 6 位字符" class="w-full pl-11 pr-4 py-3 text-base border outline-none" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px; color: #141413;">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2" style="color: #5E5D59;">确认密码</label>
+                        <div class="relative">
+                            <i data-lucide="lock" class="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4" style="color: #8A8985;"></i>
+                            <input type="password" placeholder="再次输入密码" class="w-full pl-11 pr-4 py-3 text-base border outline-none" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px; color: #141413;">
+                        </div>
+                    </div>
+                    <div class="p-3 rounded-lg flex items-center gap-2" style="background-color: rgba(46,160,67,0.1);">
+                        <i data-lucide="gift" class="w-4 h-4" style="color: #2ea043;"></i>
+                        <span class="text-sm" style="color: #2ea043;">注册即送 10 积分!</span>
+                    </div>
+                    <button class="w-full py-3 font-medium text-white" style="background-color: #DA7756; border-radius: 12px;">
+                        注册
+                    </button>
+                    <p class="text-center text-sm" style="color: #8A8985;">
+                        已有账户? <a href="#" onclick="switchLoginTab('login')" style="color: #DA7756;">立即登录</a>
+                    </p>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- ==================== CREDITS PAGE ==================== -->
+    <div id="page-credits" class="page" style="padding-top: 48px;">
+        <header class="sticky top-12 z-40 border-b" style="background-color: #FAF9F5; border-color: #E8E6DC;">
+            <div class="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+                <a href="#" onclick="showPage('home')" class="flex items-center gap-2">
+                    <div class="w-8 h-8 flex items-center justify-center" style="background-color: #DA7756; border-radius: 0 8px 8px 8px;">
+                        <i data-lucide="mic" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <span class="text-xl font-medium tracking-tight" style="font-family: Georgia, serif; color: #141413;">Podscript</span>
+                </a>
+                <div class="flex items-center gap-2">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium text-white" style="background-color: #6366f1;">J</div>
+                    <span class="text-sm" style="color: #5E5D59;">jack@example.com</span>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-3xl mx-auto px-6 py-8 space-y-6">
+            <!-- Balance Card -->
+            <section class="p-8 text-center" style="background: linear-gradient(135deg, #DA7756 0%, #E89B7E 100%); border-radius: 24px;">
+                <p class="text-sm mb-2" style="color: rgba(255,255,255,0.8);">当前积分余额</p>
+                <div class="flex items-center justify-center gap-2 mb-4">
+                    <i data-lucide="coins" class="w-8 h-8 text-white"></i>
+                    <span class="text-5xl font-bold text-white">56</span>
+                </div>
+                <p class="text-sm" style="color: rgba(255,255,255,0.7);">1 积分 ≈ 1 分钟转写时长</p>
+            </section>
+
+            <!-- Recharge Section -->
+            <section class="p-6 md:p-8" style="background-color: #F5F4F0; border-radius: 24px;">
+                <h2 class="text-xl font-medium tracking-tight mb-6" style="color: #141413;">
+                    <i data-lucide="plus-circle" class="w-5 h-5 inline-block mr-2" style="color: #DA7756;"></i>
+                    充值积分
+                </h2>
+
+                <!-- Preset Amounts -->
+                <div class="grid grid-cols-3 gap-3 mb-6">
+                    <button class="amount-btn p-4 border text-center transition-all" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px;" onclick="selectAmount(this, 10)">
+                        <div class="text-2xl font-bold mb-1" style="color: #141413;">10元</div>
+                        <div class="text-sm" style="color: #5E5D59;">10 积分</div>
+                    </button>
+                    <button class="amount-btn selected p-4 border text-center transition-all" style="background-color: #DA7756; border-color: #DA7756; border-radius: 12px;" onclick="selectAmount(this, 50)">
+                        <div class="text-2xl font-bold mb-1 text-white">50元</div>
+                        <div class="text-sm" style="color: rgba(255,255,255,0.8);">50 积分</div>
+                    </button>
+                    <button class="amount-btn p-4 border text-center transition-all" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px;" onclick="selectAmount(this, 100)">
+                        <div class="text-2xl font-bold mb-1" style="color: #141413;">100元</div>
+                        <div class="text-sm" style="color: #5E5D59;">100 积分</div>
+                    </button>
+                </div>
+
+                <!-- Custom Amount -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium mb-2" style="color: #5E5D59;">自定义金额</label>
+                    <div class="flex gap-3">
+                        <div class="flex-1 relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 text-base" style="color: #8A8985;">¥</span>
+                            <input type="number" min="1" placeholder="输入金额" class="w-full pl-8 pr-4 py-3 text-base border outline-none" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px; color: #141413;">
+                        </div>
+                        <div class="flex items-center gap-2 px-4" style="background-color: #FAF9F5; border-radius: 12px;">
+                            <i data-lucide="coins" class="w-4 h-4" style="color: #DA7756;"></i>
+                            <span class="text-sm font-medium" style="color: #141413;">= <span id="customCredits">0</span> 积分</span>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-xs" style="color: #8A8985;">最低充值 1 元，1 元 = 1 积分</p>
+                </div>
+
+                <!-- Payment Method -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium mb-3" style="color: #5E5D59;">支付方式</label>
+                    <div class="flex gap-3">
+                        <label class="flex-1 flex items-center gap-3 px-4 py-3 cursor-pointer border transition-all" style="background-color: #FAF9F5; border-color: #2ea043; border-radius: 12px;">
+                            <input type="radio" name="payment" value="wxpay" checked class="w-4 h-4" style="accent-color: #2ea043;">
+                            <span class="text-2xl">💚</span>
+                            <span class="text-sm font-medium" style="color: #141413;">微信支付</span>
+                        </label>
+                        <label class="flex-1 flex items-center gap-3 px-4 py-3 cursor-pointer border transition-all" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px;">
+                            <input type="radio" name="payment" value="alipay" class="w-4 h-4" style="accent-color: #1677FF;">
+                            <span class="text-2xl">💙</span>
+                            <span class="text-sm font-medium" style="color: #141413;">支付宝</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Pay Button -->
+                <button onclick="showPage('payment-success')" class="w-full py-4 font-medium text-white text-lg flex items-center justify-center gap-2" style="background-color: #DA7756; border-radius: 12px;">
+                    <i data-lucide="credit-card" class="w-5 h-5"></i>
+                    立即支付 ¥50
+                </button>
+            </section>
+
+            <!-- Transaction History -->
+            <section class="p-6 md:p-8" style="background-color: #F5F4F0; border-radius: 24px;">
+                <h2 class="text-xl font-medium tracking-tight mb-6" style="color: #141413;">
+                    <i data-lucide="history" class="w-5 h-5 inline-block mr-2" style="color: #DA7756;"></i>
+                    交易记录
+                </h2>
+
+                <div class="overflow-x-auto" style="background-color: #FAF9F5; border-radius: 12px;">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #E8E6DC;">
+                                <th class="text-left py-3 px-4 font-medium" style="color: #8A8985;">时间</th>
+                                <th class="text-left py-3 px-4 font-medium" style="color: #8A8985;">类型</th>
+                                <th class="text-right py-3 px-4 font-medium" style="color: #8A8985;">变动</th>
+                                <th class="text-right py-3 px-4 font-medium" style="color: #8A8985;">余额</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr style="border-bottom: 1px solid #E8E6DC;">
+                                <td class="py-3 px-4" style="color: #5E5D59;">2026-01-04 10:30</td>
+                                <td class="py-3 px-4" style="color: #5E5D59;">转写消费</td>
+                                <td class="py-3 px-4 text-right font-medium" style="color: #cf222e;">-4</td>
+                                <td class="py-3 px-4 text-right font-medium" style="color: #141413;">56</td>
+                            </tr>
+                            <tr style="border-bottom: 1px solid #E8E6DC;">
+                                <td class="py-3 px-4" style="color: #5E5D59;">2026-01-04 09:15</td>
+                                <td class="py-3 px-4" style="color: #5E5D59;">微信充值</td>
+                                <td class="py-3 px-4 text-right font-medium" style="color: #2ea043;">+50</td>
+                                <td class="py-3 px-4 text-right font-medium" style="color: #141413;">60</td>
+                            </tr>
+                            <tr>
+                                <td class="py-3 px-4" style="color: #5E5D59;">2026-01-03 14:22</td>
+                                <td class="py-3 px-4" style="color: #5E5D59;">注册赠送</td>
+                                <td class="py-3 px-4 text-right font-medium" style="color: #2ea043;">+10</td>
+                                <td class="py-3 px-4 text-right font-medium" style="color: #141413;">10</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ==================== PAYMENT SUCCESS PAGE ==================== -->
+    <div id="page-payment-success" class="page" style="padding-top: 48px;">
+        <header class="sticky top-12 z-40 border-b" style="background-color: #FAF9F5; border-color: #E8E6DC;">
+            <div class="max-w-3xl mx-auto px-6 py-4 flex items-center justify-between">
+                <a href="#" onclick="showPage('home')" class="flex items-center gap-2">
+                    <div class="w-8 h-8 flex items-center justify-center" style="background-color: #DA7756; border-radius: 0 8px 8px 8px;">
+                        <i data-lucide="mic" class="w-4 h-4 text-white"></i>
+                    </div>
+                    <span class="text-xl font-medium tracking-tight" style="font-family: Georgia, serif; color: #141413;">Podscript</span>
+                </a>
+            </div>
+        </header>
+
+        <main class="max-w-md mx-auto px-6 py-16 text-center">
+            <div class="p-8" style="background-color: #F5F4F0; border-radius: 24px;">
+                <div class="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center" style="background-color: rgba(46,160,67,0.1);">
+                    <i data-lucide="check-circle" class="w-10 h-10" style="color: #2ea043;"></i>
+                </div>
+                <h1 class="text-2xl font-medium mb-2" style="color: #141413;">支付成功!</h1>
+                <p class="mb-6" style="color: #5E5D59;">您已成功充值 50 积分</p>
+
+                <div class="p-4 mb-6" style="background-color: #FAF9F5; border-radius: 12px;">
+                    <div class="flex justify-between mb-2">
+                        <span class="text-sm" style="color: #8A8985;">充值金额</span>
+                        <span class="text-sm font-medium" style="color: #141413;">¥50.00</span>
+                    </div>
+                    <div class="flex justify-between mb-2">
+                        <span class="text-sm" style="color: #8A8985;">获得积分</span>
+                        <span class="text-sm font-medium" style="color: #2ea043;">+50 积分</span>
+                    </div>
+                    <div class="flex justify-between pt-2" style="border-top: 1px solid #E8E6DC;">
+                        <span class="text-sm" style="color: #8A8985;">当前余额</span>
+                        <span class="text-sm font-bold" style="color: #DA7756;">106 积分</span>
+                    </div>
+                </div>
+
+                <div class="flex gap-3">
+                    <button onclick="showPage('home')" class="flex-1 py-3 font-medium border" style="background-color: #FAF9F5; border-color: #E8E6DC; border-radius: 12px; color: #141413;">
+                        返回首页
+                    </button>
+                    <button onclick="showPage('credits')" class="flex-1 py-3 font-medium text-white" style="background-color: #DA7756; border-radius: 12px;">
+                        查看余额
+                    </button>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Footer (shown on all pages) -->
+    <footer class="mt-16" style="background-color: #191918;">
+        <div class="max-w-3xl mx-auto px-6 py-12">
+            <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+                <div class="flex items-center gap-2">
+                    <div class="w-6 h-6 flex items-center justify-center" style="background-color: #DA7756; border-radius: 0 6px 6px 6px;">
+                        <i data-lucide="mic" class="w-3 h-3 text-white"></i>
+                    </div>
+                    <span class="font-medium tracking-tight" style="font-family: Georgia, serif; color: #FAF9F5;">Podscript</span>
+                </div>
+                <div class="flex items-center gap-6">
+                    <a href="/docs" class="text-sm transition-colors" style="color: rgba(250,249,245,0.6);">API 文档</a>
+                    <a href="https://github.com" target="_blank" class="text-sm transition-colors" style="color: rgba(250,249,245,0.6);">GitHub</a>
+                </div>
+            </div>
+            <div class="mt-8 pt-6 border-t text-center text-sm" style="border-color: rgba(250,249,245,0.1); color: rgba(250,249,245,0.4);">
+                © 2026 Podscript. 音视频转写工具
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Page navigation
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById('page-' + pageId).classList.add('active');
+            window.scrollTo(0, 0);
+            lucide.createIcons();
+        }
+
+        // Login/Register tab switching
+        function switchLoginTab(tab) {
+            const tabs = document.querySelectorAll('#page-login .tab-btn');
+            tabs.forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+
+            if (tab === 'login') {
+                document.getElementById('login-form').classList.remove('hidden');
+                document.getElementById('register-form').classList.add('hidden');
+            } else {
+                document.getElementById('login-form').classList.add('hidden');
+                document.getElementById('register-form').classList.remove('hidden');
+            }
+        }
+
+        // Amount selection
+        function selectAmount(btn, amount) {
+            document.querySelectorAll('.amount-btn').forEach(b => {
+                b.classList.remove('selected');
+                b.style.backgroundColor = '#FAF9F5';
+                b.style.borderColor = '#E8E6DC';
+                b.querySelector('.text-2xl').style.color = '#141413';
+                b.querySelector('.text-sm').style.color = '#5E5D59';
+            });
+            btn.classList.add('selected');
+            btn.style.backgroundColor = '#DA7756';
+            btn.style.borderColor = '#DA7756';
+            btn.querySelector('.text-2xl').style.color = 'white';
+            btn.querySelector('.text-sm').style.color = 'rgba(255,255,255,0.8)';
+        }
+
+        // Initialize icons
+        lucide.createIcons();
+    </script>
+</body>
+</html>
