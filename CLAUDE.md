@@ -4,9 +4,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Podscript is a podcast/audio-video transcription application. Users submit URLs (including YouTube links), and the system downloads, preprocesses, transcribes (via Alibaba Cloud Tingwu ASR), and outputs SRT/Markdown files.
+Podscript is a podcast/audio-video transcription application. Users submit URLs (including YouTube links), and the system downloads, preprocesses, transcribes, and outputs SRT/Markdown files.
 
 **Python requirement:** 3.10 - 3.12 (3.9 has SSL compatibility issues with yt-dlp)
+
+**Dual ASR Engines:**
+- **Whisper (offline)** — OpenAI open-source model, runs locally, no API keys needed
+- **Tingwu (online)** — Alibaba Cloud service, requires credentials, supports speaker diarization
 
 ## Commands
 
@@ -14,6 +18,7 @@ Podscript is a podcast/audio-video transcription application. Users submit URLs 
 # Setup
 python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
+pip install openai-whisper  # For Whisper offline transcription
 
 # Run tests (80% coverage required)
 PYTHONPATH=./src pytest --disable-warnings --maxfail=1
@@ -26,6 +31,9 @@ PYTHONPATH=./src pytest tests/test_api.py -v
 
 # Start API server (default port 8001)
 PYTHONPATH=./src uvicorn podscript_api.main:app --port 8001
+
+# Development mode with auto-reload
+PYTHONPATH=./src uvicorn podscript_api.main:app --port 8001 --reload
 
 # Linting/formatting (dev dependencies)
 black .
@@ -47,27 +55,31 @@ src/
 │   ├── pipeline.py        # Orchestrates: download → preprocess → transcribe → format
 │   ├── download.py        # URL download, YouTube via yt-dlp
 │   ├── preprocess.py      # Audio preprocessing
-│   ├── asr.py             # ASR dispatch (Tingwu or stub)
-│   ├── tingwu_adapter.py  # Alibaba Cloud Tingwu integration (OSS upload + job polling)
+│   ├── asr.py             # ASR dispatch layer (routes to Whisper or Tingwu)
+│   ├── whisper_adapter.py # OpenAI Whisper offline transcription
+│   ├── tingwu_adapter.py  # Alibaba Cloud Tingwu integration (job polling)
+│   ├── storage.py         # Unified cloud storage interface
+│   ├── cos_adapter.py     # Tencent Cloud COS adapter
 │   └── formatters.py      # SRT/Markdown generation
 └── podscript_shared/      # Shared utilities
     ├── models.py          # Pydantic models (TaskStatus, TaskDetail, AppConfig, etc.)
     └── config.py          # Environment config loader (.env support)
 ```
 
-**Data Flow:**
-1. `POST /tasks` creates a background task
-2. Pipeline: download_source → preprocess → transcribe → to_srt/to_markdown → persist_results
-3. Results stored in `artifacts/{task_id}/` (result.srt, result.md)
+**Two-Step Workflow:**
+1. **Step 1 - Download:** `POST /tasks` → downloads audio → status becomes `downloaded`
+2. **Step 2 - Transcribe:** `POST /tasks/{id}/transcribe?provider=whisper` → transcribes → status becomes `completed`
+3. Results stored in `artifacts/{task_id}/` (result.srt, result.md, result.json)
 4. Frontend polls `GET /tasks/{id}` for status, downloads from `/artifacts/{id}/result.*`
 
 ## Key Patterns
 
 - **Task state stored in-memory** (`TASKS` dict in main.py) — not persistent across restarts
 - **Background processing** via FastAPI's `BackgroundTasks`
-- **Tingwu integration** requires `TINGWU_ENABLED=1` plus valid Alibaba Cloud credentials and OSS bucket
+- **ASR provider selection** at transcribe time via `provider` query param (`whisper` or `tingwu`)
+- **Dual cloud storage** — OSS (Alibaba) or COS (Tencent) for Tingwu audio uploads
 - **Tingwu SDK**: Uses `aliyun-python-sdk-core` with CommonRequest (API version 2023-09-30)
-- **Fallback stub mode** when Tingwu disabled — returns placeholder transcript for local testing
+- **Whisper models**: tiny, base, small, medium, large, turbo (cached in `~/.cache/whisper/`)
 - **YouTube handling** requires:
   - `yt-dlp`, `ffmpeg`, and `deno` installed (`brew install ffmpeg deno` on macOS)
   - Browser cookies for authentication (defaults to Chrome, set `YTDLP_COOKIES_BROWSER=safari` for Safari)
@@ -93,11 +105,25 @@ Optional:
 
 ## API Endpoints
 
-- `POST /tasks` — Create transcription task from URL
-- `POST /tasks/upload` — Create task from uploaded file
-- `GET /tasks/{id}` — Get task status/progress
+**Task Workflow:**
+- `POST /tasks` — Create download task from URL (Step 1)
+- `POST /tasks/upload` — Create task from uploaded file (Step 1, skips download)
+- `POST /tasks/{id}/transcribe?provider=whisper` — Start transcription (Step 2)
+- `POST /tasks/transcribe-url` — Direct URL transcription (skips cloud upload)
+
+**Task Status:**
+- `GET /tasks/{id}` — Get task status/progress/logs
 - `GET /tasks/{id}/results` — Get result URLs (srt_url, markdown_url)
-- `GET /artifacts/{id}/*` — Static file serving for outputs
+- `GET /tasks/{id}/transcript` — Get structured transcript with segments
+- `GET /tasks/{id}/logs` — Get task execution logs
+
+**ASR Management:**
+- `GET /asr/providers` — Get available ASR providers and their status
+- `GET /asr/whisper/models` — Get Whisper models and download status
+- `POST /asr/whisper/download` — Download a Whisper model
+
+**Static Files:**
+- `GET /artifacts/{id}/*` — Serve output files (SRT, Markdown, audio)
 - `GET /` — Web UI
 
 ## Testing Notes
@@ -105,3 +131,10 @@ Optional:
 - Coverage configured in `pyproject.toml` with 80% threshold
 - `tingwu_adapter.py` excluded from coverage (requires real cloud credentials)
 - Tests use `httpx.AsyncClient` with FastAPI's `TestClient`
+
+## Active Technologies
+- Python 3.10-3.12 + FastAPI, Pydantic, yt-dlp, openai-whisper (002-add-transcribe-history)
+- JSON 文件 (`artifacts/history.json`) + 任务目录 (`artifacts/{task_id}/`) (002-add-transcribe-history)
+
+## Recent Changes
+- 002-add-transcribe-history: Added Python 3.10-3.12 + FastAPI, Pydantic, yt-dlp, openai-whisper

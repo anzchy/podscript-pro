@@ -1,8 +1,9 @@
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
+from urllib.parse import quote
 
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Response, UploadFile, File, Query
 from fastapi.responses import HTMLResponse, FileResponse
@@ -11,6 +12,12 @@ from pydantic import BaseModel
 
 from podscript_shared.config import load_config
 from podscript_shared.models import (
+    HistoryListResponse,
+    HistoryRecord,
+    HistoryStatus,
+    HistoryUpdateRequest,
+    MediaType,
+    SourceType,
     TaskCreateRequest,
     TaskDetail,
     TaskLog,
@@ -19,6 +26,8 @@ from podscript_shared.models import (
     TaskSummary,
     TranscriptSegment,
 )
+from podscript_shared.history import HistoryManager
+from podscript_shared.keywords import extract_keywords
 from podscript_pipeline import run_pipeline, run_pipeline_from_file, run_download_only, run_transcribe_only
 from podscript_pipeline.asr import get_available_providers, ASR_PROVIDER_WHISPER, ASR_PROVIDER_TINGWU
 
@@ -45,6 +54,107 @@ def add_task_log(task_id: str, message: str, level: str = "info"):
             message=message
         )
         TASKS[task_id].logs.append(log_entry)
+
+
+# Store source URLs for history tracking (task_id -> source_url)
+TASK_SOURCES: Dict[str, str] = {}
+
+
+def save_task_to_history(task_id: str, provider: str = "whisper"):
+    """
+    Save a completed task to history.json.
+
+    This function reads metadata from the task directory and creates a history record.
+    """
+    import json
+
+    try:
+        task_dir = Path(cfg.artifacts_dir) / task_id
+        history_path = Path(cfg.artifacts_dir) / "history.json"
+        manager = HistoryManager(history_path)
+
+        # Try to get title, duration, etc. from result.json
+        title = None
+        duration = 0
+        segments_count = 0
+
+        result_json = task_dir / "result.json"
+        if result_json.exists():
+            with open(result_json, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                duration = int(data.get("duration", 0))
+                segments_count = len(data.get("segments", []))
+
+        # Get file size from audio file and use filename as title
+        file_size = 0
+        audio_file = None
+        for ext in [".mp3", ".m4a", ".wav", ".mp4", ".webm"]:
+            for f in task_dir.glob(f"*{ext}"):
+                audio_file = f
+                file_size = f.stat().st_size
+                break
+            if audio_file:
+                break
+
+        # Use audio filename as title (sanitize special characters)
+        if audio_file and audio_file.stem != "audio":
+            # Sanitize filename: replace special chars with dash
+            import re
+            raw_title = audio_file.stem
+            title = re.sub(r'[/\\?!@#$%^&*(){}\[\]|<>:";\'`~]', '-', raw_title)
+            title = re.sub(r'-+', '-', title).strip('-')  # Collapse multiple dashes
+
+        # Fallback to default if no title found
+        if not title:
+            title = f"转写任务 {task_id[:8]}"
+
+        # Determine media type
+        media_type = MediaType.VIDEO if audio_file and audio_file.suffix in [".mp4", ".webm"] else MediaType.AUDIO
+
+        # Get source URL and type
+        source_url = TASK_SOURCES.get(task_id)
+        if source_url:
+            if "youtube.com" in source_url or "youtu.be" in source_url:
+                source_type = SourceType.YOUTUBE
+            else:
+                source_type = SourceType.URL
+        else:
+            source_type = SourceType.UPLOAD
+
+        # Extract keywords from markdown
+        tags = []
+        md_path = task_dir / "result.md"
+        if md_path.exists():
+            md_text = md_path.read_text(encoding="utf-8")[:5000]  # Limit to 5000 chars
+            tags = extract_keywords(md_text, top_k=5)
+
+        # Create history record
+        record = HistoryRecord(
+            task_id=task_id,
+            title=title,
+            source_url=source_url,
+            source_type=source_type,
+            media_type=media_type,
+            duration=duration,
+            file_size=file_size,
+            tags=tags,
+            created_at=datetime.now(timezone.utc),
+            viewed=False,
+            thumbnail_url=None,
+            status=HistoryStatus.COMPLETED,
+        )
+
+        manager.add_record(record)
+        logger.info(f"[{task_id}] Saved to history with tags: {tags}")
+
+    except Exception as e:
+        logger.error(f"[{task_id}] Failed to save to history: {e}", exc_info=True)
+
+
+def get_history_manager() -> HistoryManager:
+    """Get a HistoryManager instance for the artifacts directory."""
+    history_path = Path(cfg.artifacts_dir) / "history.json"
+    return HistoryManager(history_path)
 
 
 static_dir = Path(cfg.artifacts_dir)
@@ -120,6 +230,99 @@ async def get_whisper_models():
         raise HTTPException(status_code=500, detail="Whisper not installed. Run: pip install openai-whisper")
 
 
+# ============== History APIs ==============
+
+@app.get("/history", response_model=HistoryListResponse)
+async def get_history(
+    page: int = Query(default=1, ge=1, description="Page number"),
+    limit: int = Query(default=20, ge=1, le=100, description="Records per page"),
+    status: Optional[str] = Query(default=None, description="Filter by status"),
+):
+    """Get paginated list of transcription history records."""
+    manager = get_history_manager()
+    records, total = manager.list_records(page=page, limit=limit, status=status)
+
+    return HistoryListResponse(
+        total=total,
+        page=page,
+        limit=limit,
+        records=records,
+    )
+
+
+@app.get("/history/{task_id}", response_model=HistoryRecord)
+async def get_history_record(task_id: str):
+    """Get a single history record by task ID."""
+    manager = get_history_manager()
+    record = manager.get_record(task_id)
+
+    if not record:
+        raise HTTPException(status_code=404, detail="History record not found")
+
+    return record
+
+
+@app.patch("/history/{task_id}")
+async def update_history_record(task_id: str, req: HistoryUpdateRequest):
+    """Update a history record (viewed status or tags)."""
+    manager = get_history_manager()
+
+    # Build kwargs for update
+    kwargs = {}
+    if req.viewed is not None:
+        kwargs["viewed"] = req.viewed
+    if req.tags is not None:
+        kwargs["tags"] = req.tags
+
+    if not kwargs:
+        return {"success": True}  # Nothing to update
+
+    success = manager.update_record(task_id, **kwargs)
+    if not success:
+        raise HTTPException(status_code=404, detail="History record not found")
+
+    return {"success": True}
+
+
+@app.delete("/history/{task_id}")
+async def delete_history_record(task_id: str):
+    """Soft delete a history record (sets status to DELETED)."""
+    manager = get_history_manager()
+
+    success = manager.delete_record(task_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="History record not found")
+
+    return {"success": True}
+
+
+@app.get("/media-info/{task_id}")
+async def get_media_info(task_id: str):
+    """Get media file info from artifacts directory (doesn't require in-memory task)."""
+    task_dir = Path(cfg.artifacts_dir) / task_id
+
+    if not task_dir.exists():
+        raise HTTPException(status_code=404, detail="Task directory not found")
+
+    # Find media files
+    media_url = ""
+    media_type = "audio"
+
+    for ext in [".mp3", ".m4a", ".wav", ".mp4", ".webm", ".ogg", ".flac"]:
+        for file in task_dir.glob(f"*{ext}"):
+            media_url = f"/artifacts/{task_id}/{quote(file.name)}"
+            if ext in [".mp4", ".webm"]:
+                media_type = "video"
+            break
+        if media_url:
+            break
+
+    return {
+        "media_url": media_url,
+        "media_type": media_type,
+    }
+
+
 # ============== Task APIs ==============
 
 @app.post("/tasks", response_model=TaskSummary)
@@ -128,6 +331,8 @@ async def create_task(req: TaskCreateRequest, bg: BackgroundTasks):
     task_id = uuid.uuid4().hex[:12]
     logger.info(f"[{task_id}] Creating download task for URL: {req.source_url}")
     TASKS[task_id] = TaskDetail(id=task_id, status=TaskStatus.queued, progress=0.0)
+    # Store source URL for history tracking
+    TASK_SOURCES[task_id] = str(req.source_url)
 
     def _download():
         try:
@@ -232,6 +437,10 @@ async def transcribe_task(
                 srt_url=srt_url, markdown_url=md_url, meta=results.get("meta", {})
             )
             add_task_log(task_id, "结果已保存，转写任务完成！")
+
+            # Save to history for tracking
+            save_task_to_history(task_id, provider=provider)
+            add_task_log(task_id, "已添加到历史记录")
         except Exception as e:
             logger.error(f"[{task_id}] Transcription failed: {e}", exc_info=True)
             add_task_log(task_id, f"转写失败: {str(e)}", "error")

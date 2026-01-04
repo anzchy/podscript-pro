@@ -4,10 +4,97 @@ Docs: https://github.com/openai/whisper
 """
 import logging
 import os
+import sys
+import io
+import re
+import threading
 from pathlib import Path
 from typing import Dict, Any, Optional, Callable
 
 logger = logging.getLogger(__name__)
+
+
+class TqdmProgressCapture:
+    """Capture tqdm progress output and send to callback."""
+
+    def __init__(self, callback: Optional[Callable[[str], None]] = None, throttle_percent: int = 5):
+        self.callback = callback
+        self.throttle_percent = throttle_percent  # Only report every N percent
+        self.last_reported_percent = -1
+        self.buffer = ""
+        self._original_stderr = None
+        self._pipe_read = None
+        self._pipe_write = None
+        self._reader_thread = None
+        self._stop_event = threading.Event()
+
+    def __enter__(self):
+        if not self.callback:
+            return self
+
+        # Create a pipe to capture stderr
+        self._pipe_read, self._pipe_write = os.pipe()
+        self._original_stderr = os.dup(sys.stderr.fileno())
+
+        # Redirect stderr to our pipe
+        os.dup2(self._pipe_write, sys.stderr.fileno())
+
+        # Start a thread to read from the pipe
+        self._stop_event.clear()
+        self._reader_thread = threading.Thread(target=self._read_progress, daemon=True)
+        self._reader_thread.start()
+
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if not self.callback or self._original_stderr is None:
+            return
+
+        # Restore stderr
+        os.dup2(self._original_stderr, sys.stderr.fileno())
+        os.close(self._original_stderr)
+
+        # Stop the reader thread
+        self._stop_event.set()
+        os.close(self._pipe_write)
+
+        if self._reader_thread:
+            self._reader_thread.join(timeout=1.0)
+
+        os.close(self._pipe_read)
+
+    def _read_progress(self):
+        """Read progress from pipe and parse tqdm output."""
+        try:
+            while not self._stop_event.is_set():
+                # Read available data
+                data = os.read(self._pipe_read, 4096)
+                if not data:
+                    break
+
+                text = data.decode('utf-8', errors='ignore')
+                self._parse_progress(text)
+        except OSError:
+            pass  # Pipe closed
+
+    def _parse_progress(self, text: str):
+        """Parse tqdm progress bar output."""
+        # tqdm format: "10%|██        | 51300/521970 [00:17<02:46, 2825.41frames/s]"
+        # Match percentage and frame info
+        pattern = r'(\d+)%\|[^|]*\|\s*(\d+)/(\d+)\s*\[([^\]]+)\]'
+        matches = re.findall(pattern, text)
+
+        for match in matches:
+            percent, current, total, time_info = match
+            percent_int = int(percent)
+
+            # Throttle: only report if percent changed by threshold or at 100%
+            if percent_int - self.last_reported_percent >= self.throttle_percent or percent_int == 100:
+                self.last_reported_percent = percent_int
+                # Format: "转写进度: 10% (51300/521970) [00:17<02:46]"
+                progress_msg = f"转写进度: {percent}% ({current}/{total}) [{time_info}]"
+                if self.callback:
+                    self.callback(progress_msg)
 
 # Available Whisper models with their properties
 WHISPER_MODELS = {
@@ -139,7 +226,7 @@ def transcribe_audio(
     # Transcribe with Whisper
     options = {
         "task": task,
-        "verbose": False,
+        "verbose": True,  # Enable verbose mode to get progress bar
     }
     if language:
         options["language"] = language
@@ -147,7 +234,9 @@ def transcribe_audio(
         options["initial_prompt"] = initial_prompt
         log(f"Using initial prompt: {initial_prompt[:50]}...")
 
-    result = model.transcribe(str(audio_path), **options)
+    # Capture progress from tqdm and send to callback
+    with TqdmProgressCapture(callback=log_callback):
+        result = model.transcribe(str(audio_path), **options)
 
     detected_lang = result.get("language", language or "unknown")
     log(f"Detected language: {detected_lang}")

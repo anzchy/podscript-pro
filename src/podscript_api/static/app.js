@@ -43,6 +43,7 @@ let pollTimer = null
 let isReadyToTranscribe = false
 let hasDirectAudioUrl = false  // Track if direct audio URL is provided
 let displayedSegmentCount = 0  // Track how many segments have been rendered
+let pendingFile = null  // Store file for deferred upload
 
 // Get selected provider
 function getSelectedProvider() {
@@ -53,12 +54,13 @@ function getSelectedProvider() {
 // Toggle provider options visibility
 function toggleProviderOptions() {
   const provider = getSelectedProvider()
-  els.whisperOptions.hidden = provider !== 'whisper'
-  els.tingwuOptions.hidden = provider !== 'tingwu'
+  if (els.whisperOptions) els.whisperOptions.hidden = provider !== 'whisper'
+  if (els.tingwuOptions) els.tingwuOptions.hidden = provider !== 'tingwu'
 }
 
 // Check model download status
 async function checkModelStatus() {
+  if (!els.whisperModel || !els.modelStatus) return
   try {
     const res = await fetch('/asr/whisper/models')
     if (!res.ok) return
@@ -75,17 +77,22 @@ async function checkModelStatus() {
       }
     }
   } catch (e) {
-    els.modelStatus.textContent = 'Whisper 未安装，请运行: pip install openai-whisper'
-    els.modelStatus.className = 'model-status'
+    if (els.modelStatus) {
+      els.modelStatus.textContent = 'Whisper 未安装，请运行: pip install openai-whisper'
+      els.modelStatus.className = 'model-status'
+    }
   }
 }
 
 // Download Whisper model
 async function downloadModel() {
+  if (!els.whisperModel) return
   const modelName = els.whisperModel.value
-  els.downloadModelBtn.disabled = true
-  els.modelStatus.textContent = '正在下载模型...'
-  els.modelStatus.className = 'model-status downloading'
+  if (els.downloadModelBtn) els.downloadModelBtn.disabled = true
+  if (els.modelStatus) {
+    els.modelStatus.textContent = '正在下载模型...'
+    els.modelStatus.className = 'model-status downloading'
+  }
 
   try {
     const res = await fetch('/asr/whisper/download', {
@@ -95,19 +102,25 @@ async function downloadModel() {
     })
     const data = await res.json()
     if (data.status === 'already_downloaded') {
-      els.modelStatus.textContent = '模型已下载'
-      els.modelStatus.className = 'model-status downloaded'
+      if (els.modelStatus) {
+        els.modelStatus.textContent = '模型已下载'
+        els.modelStatus.className = 'model-status downloaded'
+      }
     } else {
-      els.modelStatus.textContent = '模型下载中，请稍候...'
-      els.modelStatus.className = 'model-status downloading'
+      if (els.modelStatus) {
+        els.modelStatus.textContent = '模型下载中，请稍候...'
+        els.modelStatus.className = 'model-status downloading'
+      }
       // Poll for completion
       setTimeout(checkModelStatus, 5000)
     }
   } catch (e) {
-    els.modelStatus.textContent = '下载失败: ' + e.message
-    els.modelStatus.className = 'model-status'
+    if (els.modelStatus) {
+      els.modelStatus.textContent = '下载失败: ' + e.message
+      els.modelStatus.className = 'model-status'
+    }
   } finally {
-    els.downloadModelBtn.disabled = false
+    if (els.downloadModelBtn) els.downloadModelBtn.disabled = false
   }
 }
 
@@ -173,23 +186,27 @@ async function fetchMarkdown(url) {
 }
 
 function setDownloadError(text) {
-  els.downloadError.textContent = text
-  els.downloadError.hidden = !text
+  if (els.downloadError) {
+    els.downloadError.textContent = text
+    els.downloadError.hidden = !text
+  }
 }
 
 function setTranscribeError(text) {
-  els.transcribeError.textContent = text
-  els.transcribeError.hidden = !text
+  if (els.transcribeError) {
+    els.transcribeError.textContent = text
+    els.transcribeError.hidden = !text
+  }
 }
 
 function setProgress(p) {
   const val = Math.max(0, Math.min(1, p || 0))
-  els.progressBar.style.width = `${Math.floor(val * 100)}%`
+  if (els.progressBar) els.progressBar.style.width = `${Math.floor(val * 100)}%`
 }
 
 function setTranscribeProgress(p) {
   const val = Math.max(0, Math.min(1, p || 0))
-  els.transcribeProgressBar.style.width = `${Math.floor(val * 100)}%`
+  if (els.transcribeProgressBar) els.transcribeProgressBar.style.width = `${Math.floor(val * 100)}%`
 }
 
 // Check if URL looks like an audio/video URL
@@ -214,30 +231,42 @@ function isAudioVideoUrl(url) {
 
 // Check and update direct audio URL state
 function checkDirectAudioUrl() {
-  const url = els.directAudioUrl.value.trim()
+  const url = els.directAudioUrl ? els.directAudioUrl.value.trim() : ''
   hasDirectAudioUrl = isAudioVideoUrl(url)
   updateTranscribeButton()
 }
 
 function updateTranscribeButton() {
-  if (isReadyToTranscribe || hasDirectAudioUrl) {
-    els.transcribeBtn.disabled = false
-    if (hasDirectAudioUrl && !isReadyToTranscribe) {
-      els.transcribeHint.textContent = '检测到音频链接，点击直接转写'
-      els.transcribeHint.style.color = '#da7756'
+  if (pendingFile || isReadyToTranscribe || hasDirectAudioUrl) {
+    if (els.transcribeBtn) els.transcribeBtn.disabled = false
+    if (pendingFile) {
+      if (els.transcribeHint) {
+        els.transcribeHint.textContent = '文件已选定，点击开始转写'
+        els.transcribeHint.style.color = '#2ea043'
+      }
+    } else if (hasDirectAudioUrl && !isReadyToTranscribe) {
+      if (els.transcribeHint) {
+        els.transcribeHint.textContent = '检测到音频链接，点击直接转写'
+        els.transcribeHint.style.color = '#da7756'
+      }
     } else {
-      els.transcribeHint.textContent = '音频已就绪，点击开始转写'
-      els.transcribeHint.style.color = '#2ea043'
+      if (els.transcribeHint) {
+        els.transcribeHint.textContent = '音频已就绪，点击开始转写'
+        els.transcribeHint.style.color = '#2ea043'
+      }
     }
   } else {
-    els.transcribeBtn.disabled = true
-    els.transcribeHint.textContent = '请先下载音频或上传本地文件'
-    els.transcribeHint.style.color = '#666'
+    if (els.transcribeBtn) els.transcribeBtn.disabled = true
+    if (els.transcribeHint) {
+      els.transcribeHint.textContent = '请先下载音频或上传本地文件'
+      els.transcribeHint.style.color = '#666'
+    }
   }
 }
 
 function updateLogViewer(logs) {
   if (!logs || logs.length === 0) return
+  if (!els.logContent) return
 
   let html = ''
   for (const log of logs) {
@@ -248,7 +277,7 @@ function updateLogViewer(logs) {
 
   // Auto scroll to bottom
   const viewer = document.getElementById('logViewer')
-  viewer.scrollTop = viewer.scrollHeight
+  if (viewer) viewer.scrollTop = viewer.scrollHeight
 }
 
 // Format time in MM:SS format
@@ -299,22 +328,25 @@ function renderTranscriptSegment(segment, index, isNew = false) {
 
 // Show loading state in transcript
 function showTranscriptLoading() {
-  els.result.hidden = true
-  els.streamingTranscript.hidden = false
-  els.transcriptSegments.innerHTML = `
-    <div class="segment-loading">
-      <div class="segment-loading-dots">
-        <span></span>
-        <span></span>
-        <span></span>
+  if (els.result) els.result.hidden = true
+  if (els.streamingTranscript) els.streamingTranscript.hidden = false
+  if (els.transcriptSegments) {
+    els.transcriptSegments.innerHTML = `
+      <div class="segment-loading">
+        <div class="segment-loading-dots">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
       </div>
-    </div>
-  `
+    `
+  }
 }
 
 // Update streaming transcript display with new segments
 function updateStreamingTranscript(segments) {
   if (!segments || segments.length === 0) return
+  if (!els.transcriptSegments) return  // Skip if element doesn't exist
 
   // If this is the first update, clear loading state
   if (displayedSegmentCount === 0 && els.transcriptSegments.querySelector('.segment-loading')) {
@@ -333,43 +365,50 @@ function updateStreamingTranscript(segments) {
   displayedSegmentCount = segments.length
 
   // Update segment count badge
-  els.segmentCount.textContent = `${segments.length} 段`
-  els.segmentCount.hidden = false
+  if (els.segmentCount) {
+    els.segmentCount.textContent = `${segments.length} 段`
+    els.segmentCount.hidden = false
+  }
 
   // Auto scroll to the latest segment
-  els.streamingTranscript.scrollTop = els.streamingTranscript.scrollHeight
+  if (els.streamingTranscript) {
+    els.streamingTranscript.scrollTop = els.streamingTranscript.scrollHeight
+  }
 }
 
 // Reset streaming transcript
 function resetStreamingTranscript() {
   displayedSegmentCount = 0
-  els.transcriptSegments.innerHTML = ''
-  els.streamingTranscript.hidden = true
-  els.segmentCount.hidden = true
+  if (els.transcriptSegments) els.transcriptSegments.innerHTML = ''
+  if (els.streamingTranscript) els.streamingTranscript.hidden = true
+  if (els.segmentCount) els.segmentCount.hidden = true
 }
 
 function resetUI() {
   setDownloadError('')
   setTranscribeError('')
-  els.taskId.textContent = '-'
-  els.status.textContent = '-'
+  if (els.taskId) els.taskId.textContent = '-'
+  if (els.status) els.status.textContent = '-'
   setProgress(0)
-  els.result.textContent = '尚未生成'
-  els.result.hidden = false
-  els.links.hidden = true
-  els.srtLink.href = '#'
-  els.mdLink.href = '#'
-  els.viewResultLink.href = '#'
+  if (els.result) {
+    els.result.textContent = '尚未生成'
+    els.result.hidden = false
+  }
+  if (els.links) els.links.hidden = true
+  if (els.srtLink) els.srtLink.href = '#'
+  if (els.mdLink) els.mdLink.href = '#'
+  if (els.viewResultLink) els.viewResultLink.href = '#'
   isReadyToTranscribe = false
+  pendingFile = null  // Clear pending file
   // Don't reset hasDirectAudioUrl here - let user keep their URL
   updateTranscribeButton()
-  els.transcribeProgress.hidden = true
-  els.logContent.innerHTML = ''
+  if (els.transcribeProgress) els.transcribeProgress.hidden = true
+  if (els.logContent) els.logContent.innerHTML = ''
   resetStreamingTranscript()
   // Reset file upload status
-  els.fileStatus.hidden = true
-  els.fileLabel.classList.remove('file-selected')
-  els.fileLabelText.textContent = '点击或拖拽上传本地音/视频文件'
+  if (els.fileStatus) els.fileStatus.hidden = true
+  if (els.fileLabel) els.fileLabel.classList.remove('file-selected')
+  if (els.fileLabelText) els.fileLabelText.textContent = '点击或拖拽上传本地音/视频文件'
 }
 
 function getStatusText(status) {
@@ -388,54 +427,45 @@ function getStatusText(status) {
 
 async function startDownload() {
   resetUI()
-  const url = els.url.value.trim()
+  const url = els.url ? els.url.value.trim() : ''
   if (!url) { setDownloadError('请输入YouTube链接'); return }
 
-  els.downloadBtn.disabled = true
+  if (els.downloadBtn) els.downloadBtn.disabled = true
   try {
     const task = await createTask(url)
     currentTaskId = task.id
-    els.taskId.textContent = currentTaskId
-    els.status.textContent = getStatusText(task.status)
+    if (els.taskId) els.taskId.textContent = currentTaskId
+    if (els.status) els.status.textContent = getStatusText(task.status)
     setProgress(task.progress)
     poll()
   } catch (e) {
     setDownloadError(String(e.message || e))
   } finally {
-    els.downloadBtn.disabled = false
+    if (els.downloadBtn) els.downloadBtn.disabled = false
   }
 }
 
-async function handleFileUpload() {
-  const file = els.file.files && els.file.files[0]
+function handleFileUpload() {
+  const file = els.file && els.file.files && els.file.files[0]
   if (!file) return
 
   // Reset file-specific UI only
   setTranscribeError('')
-  els.fileStatus.hidden = true
-  els.fileLabel.classList.remove('file-selected')
+  if (els.fileStatus) els.fileStatus.hidden = true
+  if (els.fileLabel) els.fileLabel.classList.remove('file-selected')
 
-  try {
-    // Show uploading state
-    els.fileLabelText.textContent = '上传中...'
+  // Store file for deferred upload (don't upload immediately)
+  pendingFile = file
+  currentTaskId = null  // Clear any previous task
 
-    const task = await uploadTask(file)
-    currentTaskId = task.id
+  // Show file selected status
+  if (els.fileLabel) els.fileLabel.classList.add('file-selected')
+  if (els.fileStatus) els.fileStatus.hidden = false
+  if (els.fileStatusText) els.fileStatusText.textContent = `已选定本地文件: ${file.name}`
 
-    // Show file selected status below upload area (not in status card)
-    els.fileLabel.classList.add('file-selected')
-    els.fileLabelText.textContent = '点击或拖拽上传本地音/视频文件'
-    els.fileStatus.hidden = false
-    els.fileStatusText.textContent = `已选定本地文件: ${file.name}`
-
-    if (task.status === 'downloaded') {
-      isReadyToTranscribe = true
-      updateTranscribeButton()
-    }
-  } catch (e) {
-    els.fileLabelText.textContent = '点击或拖拽上传本地音/视频文件'
-    setTranscribeError(String(e.message || e))
-  }
+  // Enable transcribe button - file will be uploaded when transcribe is clicked
+  isReadyToTranscribe = true
+  updateTranscribeButton()
 }
 
 // Create task with direct audio URL (skip upload, go straight to transcription)
@@ -463,9 +493,9 @@ async function createDirectUrlTask(audioUrl, provider, modelName, prompt) {
 }
 
 async function transcribe() {
-  const directUrl = els.directAudioUrl.value.trim()
+  const directUrl = els.directAudioUrl ? els.directAudioUrl.value.trim() : ''
   const provider = getSelectedProvider()
-  const modelName = provider === 'whisper' ? els.whisperModel.value : null
+  const modelName = provider === 'whisper' && els.whisperModel ? els.whisperModel.value : null
   const prompt = els.customPrompt ? els.customPrompt.value : ''
 
   // Reset streaming transcript for new transcription
@@ -473,48 +503,86 @@ async function transcribe() {
   showTranscriptLoading()
 
   // If direct URL is provided and no file is uploaded, use direct URL mode
-  if (directUrl && hasDirectAudioUrl && !isReadyToTranscribe) {
-    els.transcribeBtn.disabled = true
-    els.transcribeHint.textContent = '转写进行中...'
+  if (directUrl && hasDirectAudioUrl && !pendingFile && !currentTaskId) {
+    if (els.transcribeBtn) els.transcribeBtn.disabled = true
+    if (els.transcribeHint) els.transcribeHint.textContent = '转写进行中...'
     setTranscribeError('')
 
     // Show progress section
-    els.transcribeProgress.hidden = false
-    els.transcribeStatus.textContent = '提交转写任务...'
+    if (els.transcribeProgress) els.transcribeProgress.hidden = false
+    if (els.transcribeStatus) els.transcribeStatus.textContent = '提交转写任务...'
     setTranscribeProgress(0.3)
 
     try {
       const task = await createDirectUrlTask(directUrl, provider, modelName, prompt)
       currentTaskId = task.id
-      els.taskId.textContent = currentTaskId
-      els.status.textContent = getStatusText(task.status)
+      if (els.taskId) els.taskId.textContent = currentTaskId
+      if (els.status) els.status.textContent = getStatusText(task.status)
       pollTranscription()
     } catch (e) {
       setTranscribeError(String(e.message || e))
-      els.transcribeBtn.disabled = false
+      if (els.transcribeBtn) els.transcribeBtn.disabled = false
       updateTranscribeButton()
-      els.transcribeProgress.hidden = true
+      if (els.transcribeProgress) els.transcribeProgress.hidden = true
       resetStreamingTranscript()
-      els.result.hidden = false
+      if (els.result) els.result.hidden = false
     }
     return
   }
 
-  // Normal flow: require existing task
-  if (!currentTaskId) {
-    setTranscribeError('请先下载音频或上传文件')
-    resetStreamingTranscript()
-    els.result.hidden = false
+  // Handle pending file: upload first, then transcribe
+  if (pendingFile) {
+    if (els.transcribeBtn) els.transcribeBtn.disabled = true
+    if (els.transcribeHint) els.transcribeHint.textContent = '上传并转写中...'
+    setTranscribeError('')
+
+    // Show progress section
+    if (els.transcribeProgress) els.transcribeProgress.hidden = false
+    if (els.transcribeStatus) els.transcribeStatus.textContent = '上传文件...'
+    setTranscribeProgress(0.1)
+
+    try {
+      // Upload the file
+      const task = await uploadTask(pendingFile)
+      currentTaskId = task.id
+      if (els.taskId) els.taskId.textContent = currentTaskId
+      if (els.status) els.status.textContent = getStatusText(task.status)
+      setTranscribeProgress(0.3)
+
+      // Clear pending file
+      pendingFile = null
+
+      // Immediately start transcription
+      if (els.transcribeStatus) els.transcribeStatus.textContent = '开始转写...'
+      setTranscribeProgress(0.5)
+      await startTranscribe(currentTaskId, provider, modelName, prompt)
+      pollTranscription()
+    } catch (e) {
+      setTranscribeError(String(e.message || e))
+      if (els.transcribeBtn) els.transcribeBtn.disabled = false
+      updateTranscribeButton()
+      if (els.transcribeProgress) els.transcribeProgress.hidden = true
+      resetStreamingTranscript()
+      if (els.result) els.result.hidden = false
+    }
     return
   }
 
-  els.transcribeBtn.disabled = true
-  els.transcribeHint.textContent = '转写进行中...'
+  // Normal flow: require existing task (for URL-based downloads)
+  if (!currentTaskId) {
+    setTranscribeError('请先下载音频或上传文件')
+    resetStreamingTranscript()
+    if (els.result) els.result.hidden = false
+    return
+  }
+
+  if (els.transcribeBtn) els.transcribeBtn.disabled = true
+  if (els.transcribeHint) els.transcribeHint.textContent = '转写进行中...'
   setTranscribeError('')
 
   // Show progress section
-  els.transcribeProgress.hidden = false
-  els.transcribeStatus.textContent = '准备中...'
+  if (els.transcribeProgress) els.transcribeProgress.hidden = false
+  if (els.transcribeStatus) els.transcribeStatus.textContent = '准备中...'
   setTranscribeProgress(0.5)
 
   try {
@@ -522,11 +590,11 @@ async function transcribe() {
     pollTranscription()
   } catch (e) {
     setTranscribeError(String(e.message || e))
-    els.transcribeBtn.disabled = false
+    if (els.transcribeBtn) els.transcribeBtn.disabled = false
     updateTranscribeButton()
-    els.transcribeProgress.hidden = true
+    if (els.transcribeProgress) els.transcribeProgress.hidden = true
     resetStreamingTranscript()
-    els.result.hidden = false
+    if (els.result) els.result.hidden = false
   }
 }
 
@@ -535,7 +603,7 @@ async function poll() {
   pollTimer = setInterval(async () => {
     try {
       const t = await fetchTask(currentTaskId)
-      els.status.textContent = getStatusText(t.status)
+      if (els.status) els.status.textContent = getStatusText(t.status)
       setProgress(t.progress)
 
       // Update logs
@@ -566,11 +634,11 @@ async function pollTranscription() {
   pollTimer = setInterval(async () => {
     try {
       const t = await fetchTask(currentTaskId)
-      els.status.textContent = getStatusText(t.status)
+      if (els.status) els.status.textContent = getStatusText(t.status)
       setProgress(t.progress)
 
       // Update transcription progress
-      els.transcribeStatus.textContent = getStatusText(t.status)
+      if (els.transcribeStatus) els.transcribeStatus.textContent = getStatusText(t.status)
       setTranscribeProgress(t.progress)
 
       // Update logs
@@ -586,16 +654,23 @@ async function pollTranscription() {
       if (t.status === 'completed') {
         clearInterval(pollTimer)
         isReadyToTranscribe = false
-        els.transcribeBtn.disabled = true
-        els.transcribeHint.textContent = '转写完成！'
-        els.transcribeHint.style.color = '#2ea043'
-        els.transcribeStatus.textContent = '完成！'
+        if (els.transcribeBtn) els.transcribeBtn.disabled = true
+        if (els.transcribeHint) {
+          els.transcribeHint.textContent = '转写完成！'
+          els.transcribeHint.style.color = '#2ea043'
+        }
+        if (els.transcribeStatus) els.transcribeStatus.textContent = '完成！'
 
         // Show result links
-        els.srtLink.href = `/artifacts/${currentTaskId}/result.srt`
-        els.mdLink.href = `/artifacts/${currentTaskId}/result.md`
-        els.viewResultLink.href = `/static/result.html?task_id=${currentTaskId}`
-        els.links.hidden = false
+        if (els.srtLink) els.srtLink.href = `/artifacts/${currentTaskId}/result.srt`
+        if (els.mdLink) els.mdLink.href = `/artifacts/${currentTaskId}/result.md`
+        if (els.viewResultLink) els.viewResultLink.href = `/static/result.html?task_id=${currentTaskId}`
+        if (els.links) els.links.hidden = false
+
+        // T023: Refresh history list after transcription completes
+        if (window.historyModule && window.historyModule.refreshHistory) {
+          window.historyModule.refreshHistory()
+        }
 
         // If we have partial_segments, display them now (final update)
         if (t.partial_segments && t.partial_segments.length > 0) {
@@ -622,9 +697,9 @@ async function pollTranscription() {
         setTranscribeError(t.error.message || '转写失败')
         isReadyToTranscribe = false
         updateTranscribeButton()
-        els.transcribeStatus.textContent = '失败'
+        if (els.transcribeStatus) els.transcribeStatus.textContent = '失败'
         resetStreamingTranscript()
-        els.result.hidden = false
+        if (els.result) els.result.hidden = false
       }
     } catch (e) {
       clearInterval(pollTimer)
@@ -633,16 +708,18 @@ async function pollTranscription() {
   }, 1000)
 }
 
-// Event Listeners
-els.downloadBtn.addEventListener('click', startDownload)
-els.transcribeBtn.addEventListener('click', transcribe)
-els.file.addEventListener('change', handleFileUpload)
-els.downloadModelBtn.addEventListener('click', downloadModel)
-els.whisperModel.addEventListener('change', checkModelStatus)
+// Event Listeners (with null checks)
+if (els.downloadBtn) els.downloadBtn.addEventListener('click', startDownload)
+if (els.transcribeBtn) els.transcribeBtn.addEventListener('click', transcribe)
+if (els.file) els.file.addEventListener('change', handleFileUpload)
+if (els.downloadModelBtn) els.downloadModelBtn.addEventListener('click', downloadModel)
+if (els.whisperModel) els.whisperModel.addEventListener('change', checkModelStatus)
 
 // Direct audio URL input - check on input and blur
-els.directAudioUrl.addEventListener('input', checkDirectAudioUrl)
-els.directAudioUrl.addEventListener('blur', checkDirectAudioUrl)
+if (els.directAudioUrl) {
+  els.directAudioUrl.addEventListener('input', checkDirectAudioUrl)
+  els.directAudioUrl.addEventListener('blur', checkDirectAudioUrl)
+}
 
 // Provider radio change
 document.querySelectorAll('input[name="provider"]').forEach(radio => {

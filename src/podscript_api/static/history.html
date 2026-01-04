@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史记录 - Podscript</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <div class="logo">
+                <a href="/" class="logo-link">
+                    <div class="logo-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                    </div>
+                    <span class="logo-text">Podscript</span>
+                </a>
+            </div>
+            <a href="/" class="nav-link">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                返回首页
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-container history-page">
+
+        <!-- Page Header -->
+        <div class="page-header">
+            <h1 class="page-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                历史记录
+            </h1>
+            <p class="page-subtitle" id="totalCount">共 0 条记录</p>
+        </div>
+
+        <!-- History Table -->
+        <section class="card history-full-card">
+            <div id="historyContent">
+                <div id="historyLoading" class="history-loading">
+                    <div class="segment-loading-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+                <div id="historyEmpty" class="history-empty" hidden>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <p>暂无转写记录</p>
+                    <span class="history-empty-hint">完成转写任务后，记录将显示在这里</span>
+                    <a href="/" class="btn btn-primary btn-sm" style="margin-top: 16px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>
+                        开始转写
+                    </a>
+                </div>
+                <div id="historyTable" class="history-table history-table-full" hidden>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>标题</th>
+                                <th>来源</th>
+                                <th>时长</th>
+                                <th>时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div id="pagination" class="pagination" hidden>
+                <button id="prevPage" class="pagination-btn" disabled>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                    上一页
+                </button>
+                <div class="pagination-info">
+                    <span id="currentPage">1</span> / <span id="totalPages">1</span>
+                </div>
+                <button id="nextPage" class="pagination-btn">
+                    下一页
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- Tags Edit Modal -->
+        <div id="tagsModal" class="modal" hidden>
+            <div class="modal-backdrop"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>编辑标签</h3>
+                    <button class="modal-close" id="tagsModalClose">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="text" id="tagsInput" class="input" placeholder="输入标签，用逗号分隔">
+                    <p class="hint-text">多个标签请用逗号分隔，如：AI, 技术, 访谈</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="tagsModalCancel">取消</button>
+                    <button class="btn btn-primary" id="tagsModalSave">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Delete Confirm Modal -->
+        <div id="deleteModal" class="modal" hidden>
+            <div class="modal-backdrop"></div>
+            <div class="modal-content modal-confirm">
+                <div class="modal-header">
+                    <h3>确认删除</h3>
+                    <button class="modal-close" id="deleteModalClose">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p>确定要删除这条记录吗？此操作无法撤销。</p>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="deleteModalCancel">取消</button>
+                    <button class="btn btn-danger" id="deleteModalConfirm">删除</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer-simple">
+        <span>Podscript</span>
+        <span class="footer-divider">·</span>
+        <a href="/docs" target="_blank">API 文档</a>
+    </footer>
+
+    <script src="/static/history.js"></script>
+    <script>
+        // Full history page script
+        (function() {
+            // Initialize history module (for modals)
+            if (window.historyModule && window.historyModule.initHistoryElements) {
+                window.historyModule.initHistoryElements();
+            }
+
+            const ITEMS_PER_PAGE = 20;
+            let currentPage = 1;
+            let totalRecords = 0;
+            let totalPages = 1;
+
+            // Elements
+            const totalCountEl = document.getElementById('totalCount');
+            const paginationEl = document.getElementById('pagination');
+            const prevPageBtn = document.getElementById('prevPage');
+            const nextPageBtn = document.getElementById('nextPage');
+            const currentPageEl = document.getElementById('currentPage');
+            const totalPagesEl = document.getElementById('totalPages');
+
+            // Load full history with pagination
+            async function loadFullHistory(page = 1) {
+                currentPage = page;
+
+                // Show loading
+                const loadingEl = document.getElementById('historyLoading');
+                const tableEl = document.getElementById('historyTable');
+                const emptyEl = document.getElementById('historyEmpty');
+
+                if (loadingEl) loadingEl.hidden = false;
+                if (tableEl) tableEl.hidden = true;
+                if (emptyEl) emptyEl.hidden = true;
+
+                try {
+                    const res = await fetch(`/history?page=${page}&limit=${ITEMS_PER_PAGE}`);
+                    if (!res.ok) throw new Error('Failed to fetch history');
+
+                    const data = await res.json();
+                    totalRecords = data.total;
+                    totalPages = Math.ceil(totalRecords / ITEMS_PER_PAGE) || 1;
+
+                    // Update count
+                    totalCountEl.textContent = `共 ${totalRecords} 条记录`;
+
+                    // Hide loading
+                    if (loadingEl) loadingEl.hidden = true;
+
+                    // Render table using history.js renderHistoryTable
+                    if (window.historyModule) {
+                        // Initialize history elements first if needed
+                        const tbody = document.getElementById('historyTableBody');
+                        if (tbody) tbody.innerHTML = '';
+
+                        if (data.records.length === 0) {
+                            if (emptyEl) emptyEl.hidden = false;
+                            if (tableEl) tableEl.hidden = true;
+                            if (paginationEl) paginationEl.hidden = true;
+                        } else {
+                            if (emptyEl) emptyEl.hidden = true;
+                            if (tableEl) tableEl.hidden = false;
+
+                            // Use the existing renderHistoryRow function
+                            data.records.forEach(record => {
+                                const row = renderHistoryRowLocal(record);
+                                tbody.appendChild(row);
+                            });
+
+                            updatePagination();
+                        }
+                    }
+                } catch (e) {
+                    console.error('Failed to load history:', e);
+                    if (loadingEl) loadingEl.hidden = true;
+                    if (emptyEl) emptyEl.hidden = false;
+                }
+            }
+
+            // Local render function (same as history.js but accessible here)
+            function renderHistoryRowLocal(record) {
+                const tr = document.createElement('tr');
+                const sourceInfo = getSourceTypeInfoLocal(record.source_type);
+
+                // Title cell with new indicator
+                const titleCell = document.createElement('td');
+                titleCell.setAttribute('data-label', '标题');
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'history-title-cell';
+
+                if (!record.viewed) {
+                    const indicator = document.createElement('span');
+                    indicator.className = 'history-new-indicator';
+                    indicator.title = '新记录';
+                    titleDiv.appendChild(indicator);
+                }
+
+                const titleLink = document.createElement('a');
+                titleLink.className = 'history-title-link';
+                titleLink.href = '#';
+                titleLink.textContent = record.title || `转写任务 ${record.task_id.slice(0, 8)}`;
+                titleLink.title = record.title || '';
+                titleLink.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (window.historyModule) {
+                        window.historyModule.markAsViewed(record.task_id);
+                    }
+                    window.location.href = `/static/result.html?task_id=${record.task_id}`;
+                });
+                titleDiv.appendChild(titleLink);
+                titleCell.appendChild(titleDiv);
+                tr.appendChild(titleCell);
+
+                // Source type cell
+                const sourceCell = document.createElement('td');
+                sourceCell.setAttribute('data-label', '来源');
+                const sourceBadge = document.createElement('span');
+                sourceBadge.className = `history-source-badge ${sourceInfo.class}`;
+                sourceBadge.textContent = sourceInfo.label;
+                sourceCell.appendChild(sourceBadge);
+                tr.appendChild(sourceCell);
+
+                // Duration cell
+                const durationCell = document.createElement('td');
+                durationCell.setAttribute('data-label', '时长');
+                durationCell.className = 'history-duration';
+                durationCell.textContent = formatDurationLocal(record.duration);
+                tr.appendChild(durationCell);
+
+                // Time cell
+                const timeCell = document.createElement('td');
+                timeCell.setAttribute('data-label', '时间');
+                timeCell.className = 'history-time';
+                timeCell.textContent = formatRelativeTimeLocal(record.created_at);
+                tr.appendChild(timeCell);
+
+                // Operations cell
+                const opsCell = document.createElement('td');
+                opsCell.setAttribute('data-label', '操作');
+                opsCell.className = 'history-ops-cell';
+                const opsBtn = document.createElement('button');
+                opsBtn.className = 'history-ops-btn';
+                opsBtn.title = '更多操作';
+                opsBtn.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="12" cy="5" r="1"/><circle cx="12" cy="19" r="1"/></svg>
+                `;
+                opsBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    if (window.historyModule) {
+                        window.historyModule.showOperationMenu(record.task_id, opsBtn);
+                    }
+                });
+                opsCell.appendChild(opsBtn);
+                tr.appendChild(opsCell);
+
+                return tr;
+            }
+
+            function getSourceTypeInfoLocal(sourceType) {
+                const types = {
+                    youtube: { label: 'YouTube', class: 'youtube' },
+                    upload: { label: '上传', class: 'upload' },
+                    url: { label: '链接', class: 'url' },
+                };
+                return types[sourceType] || { label: sourceType, class: '' };
+            }
+
+            function formatDurationLocal(seconds) {
+                if (!seconds || seconds <= 0) return '-';
+                const hours = Math.floor(seconds / 3600);
+                const mins = Math.floor((seconds % 3600) / 60);
+                const secs = Math.floor(seconds % 60);
+                if (hours > 0) {
+                    return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                }
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            }
+
+            function formatRelativeTimeLocal(dateStr) {
+                if (!dateStr) return '-';
+                const date = new Date(dateStr);
+                const now = new Date();
+                const diff = now - date;
+                const seconds = Math.floor(diff / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const hours = Math.floor(minutes / 60);
+                const days = Math.floor(hours / 24);
+
+                if (seconds < 60) return '刚刚';
+                if (minutes < 60) return `${minutes} 分钟前`;
+                if (hours < 24) return `${hours} 小时前`;
+                if (days < 7) return `${days} 天前`;
+
+                return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+            }
+
+            function updatePagination() {
+                if (totalRecords <= ITEMS_PER_PAGE) {
+                    paginationEl.hidden = true;
+                    return;
+                }
+
+                paginationEl.hidden = false;
+                currentPageEl.textContent = currentPage;
+                totalPagesEl.textContent = totalPages;
+
+                prevPageBtn.disabled = currentPage <= 1;
+                nextPageBtn.disabled = currentPage >= totalPages;
+            }
+
+            // Event listeners
+            prevPageBtn.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    loadFullHistory(currentPage - 1);
+                }
+            });
+
+            nextPageBtn.addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    loadFullHistory(currentPage + 1);
+                }
+            });
+
+            // Override refreshHistory for this page
+            if (window.historyModule) {
+                window.historyModule.refreshHistory = () => loadFullHistory(currentPage);
+            }
+
+            // Initialize
+            loadFullHistory(1);
+        })();
+    </script>
+</body>
+</html>

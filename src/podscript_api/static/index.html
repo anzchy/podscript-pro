@@ -195,34 +195,75 @@
             </div>
         </section>
 
-        <!-- Results Card -->
-        <section class="card card-leaf-tr">
-            <div class="result-header">
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="result-icon"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
-                <h2 class="step-title">转写结果</h2>
-                <span id="segmentCount" class="segment-count" hidden></span>
+        <!-- History Section -->
+        <section class="card card-leaf-tr history-section">
+            <div class="history-header">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="history-icon"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                <h2 class="step-title">历史记录</h2>
+                <a href="/static/history.html" class="history-view-all" id="viewAllHistory">查看全部</a>
             </div>
-
-            <div id="result" class="result-content">尚未生成</div>
-
-            <!-- Streaming Transcript Display -->
-            <div id="streamingTranscript" class="streaming-transcript" hidden>
-                <div id="transcriptSegments" class="transcript-segments"></div>
-            </div>
-
-            <div id="links" class="result-links" hidden>
-                <a id="srtLink" href="#" target="_blank" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg>
-                    下载 SRT
-                </a>
-                <a id="mdLink" href="#" target="_blank" class="btn btn-secondary">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></svg>
-                    下载 Markdown
-                </a>
-                <a id="viewResultLink" href="#" class="btn btn-accent">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
-                    查看详情
-                </a>
+            <div id="historyContent">
+                <div id="historyLoading" class="history-loading">
+                    <div class="segment-loading-dots">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </div>
+                </div>
+                <div id="historyEmpty" class="history-empty" hidden>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <p>暂无转写记录</p>
+                    <span class="history-empty-hint">完成转写任务后，记录将显示在这里</span>
+                </div>
+                <div id="historyTable" class="history-table" hidden>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>标题</th>
+                                <th>来源</th>
+                                <th>时长</th>
+                                <th>时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                        </tbody>
+                    </table>
+                </div>
+                <!-- Tags Edit Modal -->
+                <div id="tagsModal" class="modal" hidden>
+                    <div class="modal-backdrop"></div>
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h3>编辑标签</h3>
+                            <button class="modal-close" id="tagsModalClose">&times;</button>
+                        </div>
+                        <div class="modal-body">
+                            <input type="text" id="tagsInput" class="input" placeholder="输入标签，用逗号分隔">
+                            <p class="hint-text">多个标签请用逗号分隔，如：AI, 技术, 访谈</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" id="tagsModalCancel">取消</button>
+                            <button class="btn btn-primary" id="tagsModalSave">保存</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- Delete Confirm Modal -->
+                <div id="deleteModal" class="modal" hidden>
+                    <div class="modal-backdrop"></div>
+                    <div class="modal-content modal-confirm">
+                        <div class="modal-header">
+                            <h3>确认删除</h3>
+                        </div>
+                        <div class="modal-body">
+                            <p>确定要删除这条记录吗？删除后将从历史列表中移除。</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" id="deleteModalCancel">取消</button>
+                            <button class="btn btn-danger" id="deleteModalConfirm">删除</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -249,6 +290,7 @@
         </div>
     </footer>
 
+    <script src="/static/history.js"></script>
     <script src="/static/app.js"></script>
 </body>
 </html>

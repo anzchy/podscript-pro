@@ -81,16 +81,35 @@ async function init() {
 
 // Load task data from API
 async function loadTaskData() {
-  // Fetch task info
-  const taskRes = await fetch(`/tasks/${taskId}`);
-  if (!taskRes.ok) throw new Error('任务不存在');
-  const task = await taskRes.json();
+  // Try to get task from history first (persists across server restarts)
+  let taskStatus = null;
+  let historyRecord = null;
 
-  if (task.status !== 'completed') {
+  // First try in-memory task store
+  const taskRes = await fetch(`/tasks/${taskId}`);
+  if (taskRes.ok) {
+    const task = await taskRes.json();
+    taskStatus = task.status;
+  }
+
+  // If task not in memory, try history records
+  if (!taskStatus) {
+    const historyRes = await fetch(`/history/${taskId}`);
+    if (historyRes.ok) {
+      historyRecord = await historyRes.json();
+      taskStatus = historyRecord.status;
+    }
+  }
+
+  if (!taskStatus) {
+    throw new Error('任务不存在');
+  }
+
+  if (taskStatus !== 'completed') {
     throw new Error('任务尚未完成');
   }
 
-  // Fetch transcript data
+  // Fetch transcript data - try API first, then load from artifacts
   const transcriptRes = await fetch(`/tasks/${taskId}/transcript`);
   if (transcriptRes.ok) {
     const data = await transcriptRes.json();
@@ -103,26 +122,43 @@ async function loadTaskData() {
       elements.mediaPlayer.src = data.media_url;
     }
   } else {
-    // Fallback: parse from markdown
-    const resultsRes = await fetch(`/tasks/${taskId}/results`);
-    if (resultsRes.ok) {
-      const results = await resultsRes.json();
-      if (results.markdown_url) {
-        await loadFromMarkdown(results.markdown_url);
+    // Fallback: load directly from result.json in artifacts
+    const resultJsonUrl = `/artifacts/${taskId}/result.json`;
+    try {
+      const resultJsonRes = await fetch(resultJsonUrl);
+      if (resultJsonRes.ok) {
+        const resultData = await resultJsonRes.json();
+        transcriptData = resultData.segments || [];
+        duration = resultData.duration || 0;
+        mediaType = resultData.media_type || 'audio';
+      }
+    } catch (e) {
+      console.log('Failed to load result.json, trying markdown');
+    }
+
+    // If still no data, try markdown
+    if (transcriptData.length === 0) {
+      const mdUrl = `/artifacts/${taskId}/result.md`;
+      try {
+        await loadFromMarkdown(mdUrl);
+      } catch (e) {
+        console.log('Failed to load markdown');
       }
     }
   }
 
-  // Check for audio file
-  const audioUrl = `/artifacts/${taskId}/audio.mp3`;
+  // Get media file info from artifacts
   try {
-    const audioCheck = await fetch(audioUrl, { method: 'HEAD' });
-    if (audioCheck.ok) {
-      elements.mediaPlayer.src = audioUrl;
-      mediaType = 'audio';
+    const mediaInfoRes = await fetch(`/media-info/${taskId}`);
+    if (mediaInfoRes.ok) {
+      const mediaInfo = await mediaInfoRes.json();
+      if (mediaInfo.media_url) {
+        elements.mediaPlayer.src = mediaInfo.media_url;
+        mediaType = mediaInfo.media_type || 'audio';
+      }
     }
   } catch (e) {
-    // Audio file not found, might be video
+    console.log('Failed to get media info');
   }
 
   // Update UI
