@@ -3,10 +3,9 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-try:
-    from gotrue.errors import AuthApiError
-except ImportError:
-    from supabase_auth.errors import AuthApiError
+# Import both error classes - gotrue is deprecated wrapper, but actual exceptions
+# come from supabase_auth. We need to catch the actual exception type.
+from supabase_auth.errors import AuthApiError
 
 from podscript_shared.models import AuthRequest, AuthResponse
 from podscript_shared.supabase import get_supabase_client, get_supabase_admin_client
