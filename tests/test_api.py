@@ -1,15 +1,18 @@
 import json
 import tempfile
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
+import jwt
 from fastapi.testclient import TestClient
 
-from podscript_api.main import app, TASKS
+from podscript_api.main import app, TASKS, TASK_METADATA
+from podscript_api.middleware.auth import CurrentUser
 from podscript_shared.history import HistoryManager
 from podscript_shared.models import (
+    AppConfig,
     HistoryRecord,
     HistoryStatus,
     MediaType,
@@ -20,15 +23,48 @@ from podscript_shared.models import (
 
 client = TestClient(app)
 
+# Test user ID and JWT secret for authentication
+TEST_USER_ID = "test-user-id-12345"
+TEST_JWT_SECRET = "test-jwt-secret-key-for-testing-purposes"
+
+
+def get_test_auth_cookie():
+    """Generate a valid JWT token as cookie for authenticated requests."""
+    payload = {
+        "sub": TEST_USER_ID,
+        "email": "test@example.com",
+        "aud": "authenticated",
+        "exp": datetime.utcnow() + timedelta(hours=1),
+        "iat": datetime.utcnow(),
+    }
+    token = jwt.encode(payload, TEST_JWT_SECRET, algorithm="HS256")
+    return {"access_token": token}
+
+
+def get_mock_config():
+    """Get a mock AppConfig with test JWT secret."""
+    return AppConfig(
+        supabase_jwt_secret=TEST_JWT_SECRET,
+    )
+
 
 def test_create_and_fetch_task():
-    r = client.post("/tasks", json={"source_url": "https://example.com/media"})
-    assert r.status_code == 200
-    task = r.json()
-    task_id = task["id"]
+    """Test creating and fetching a task with authentication."""
+    with patch("podscript_api.middleware.auth.load_config", return_value=get_mock_config()):
+        cookies = get_test_auth_cookie()
+        r = client.post("/tasks", json={"source_url": "https://example.com/media"}, cookies=cookies)
+        assert r.status_code == 200
+        task = r.json()
+        task_id = task["id"]
 
-    r2 = client.get(f"/tasks/{task_id}")
-    assert r2.status_code == 200
+        r2 = client.get(f"/tasks/{task_id}")
+        assert r2.status_code == 200
+
+
+def test_create_task_requires_auth():
+    """Test that creating a task without auth returns 401."""
+    r = client.post("/tasks", json={"source_url": "https://example.com/media"})
+    assert r.status_code == 401
 
 
 def test_root_and_favicon():
@@ -40,39 +76,57 @@ def test_root_and_favicon():
 
 
 def test_transcribe_not_found():
-    r = client.post("/tasks/nonexistent123/transcribe")
-    assert r.status_code == 404
+    """Test transcribing a non-existent task with authentication."""
+    with patch("podscript_api.middleware.auth.load_config", return_value=get_mock_config()):
+        cookies = get_test_auth_cookie()
+        r = client.post("/tasks/nonexistent123/transcribe", cookies=cookies)
+        assert r.status_code == 404
+
+
+def test_transcribe_requires_auth():
+    """Test that transcribing without auth returns 401."""
+    r = client.post("/tasks/sometaskid/transcribe")
+    assert r.status_code == 401
 
 
 def test_transcribe_wrong_status():
-    # Create a task and manually set status to test validation
-    r = client.post("/tasks", json={"source_url": "https://example.com/media"})
-    task = r.json()
-    task_id = task["id"]
-    # Force status to queued (before download complete)
-    TASKS[task_id].status = TaskStatus.queued
-    TASKS[task_id].audio_path = None
-    # Try to transcribe before downloaded
-    r2 = client.post(f"/tasks/{task_id}/transcribe")
-    assert r2.status_code == 400
+    """Test transcribing a task with wrong status."""
+    with patch("podscript_api.middleware.auth.load_config", return_value=get_mock_config()):
+        cookies = get_test_auth_cookie()
+        # Create a task
+        r = client.post("/tasks", json={"source_url": "https://example.com/media"}, cookies=cookies)
+        task = r.json()
+        task_id = task["id"]
+        # Force status to queued (before download complete)
+        TASKS[task_id].status = TaskStatus.queued
+        TASKS[task_id].audio_path = None
+        # Try to transcribe before downloaded
+        r2 = client.post(f"/tasks/{task_id}/transcribe", cookies=cookies)
+        assert r2.status_code == 400
 
 
 def test_get_results_not_ready():
-    r = client.post("/tasks", json={"source_url": "https://example.com/media"})
-    task = r.json()
-    r2 = client.get(f"/tasks/{task['id']}/results")
-    assert r2.status_code == 400
+    """Test getting results before task is complete."""
+    with patch("podscript_api.middleware.auth.load_config", return_value=get_mock_config()):
+        cookies = get_test_auth_cookie()
+        r = client.post("/tasks", json={"source_url": "https://example.com/media"}, cookies=cookies)
+        task = r.json()
+        r2 = client.get(f"/tasks/{task['id']}/results")
+        assert r2.status_code == 400
 
 
 def test_transcribe_no_audio_path():
-    # Create task and set downloaded status but no audio path
-    r = client.post("/tasks", json={"source_url": "https://example.com/media"})
-    task = r.json()
-    task_id = task["id"]
-    TASKS[task_id].status = TaskStatus.downloaded
-    TASKS[task_id].audio_path = None
-    r2 = client.post(f"/tasks/{task_id}/transcribe")
-    assert r2.status_code == 400
+    """Test transcribing when audio path is missing."""
+    with patch("podscript_api.middleware.auth.load_config", return_value=get_mock_config()):
+        cookies = get_test_auth_cookie()
+        # Create task and set downloaded status but no audio path
+        r = client.post("/tasks", json={"source_url": "https://example.com/media"}, cookies=cookies)
+        task = r.json()
+        task_id = task["id"]
+        TASKS[task_id].status = TaskStatus.downloaded
+        TASKS[task_id].audio_path = None
+        r2 = client.post(f"/tasks/{task_id}/transcribe", cookies=cookies)
+        assert r2.status_code == 400
 
 
 def test_get_task_not_found():

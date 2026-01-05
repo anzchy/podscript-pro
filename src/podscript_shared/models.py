@@ -83,6 +83,140 @@ class AppConfig(BaseModel):
     tingwu_app_key: Optional[str] = None  # Tingwu AppKey from console
     artifacts_dir: str = "artifacts"
 
+    # Supabase configuration (Authentication & Database)
+    supabase_url: Optional[str] = None
+    supabase_anon_key: Optional[str] = None
+    supabase_service_role_key: Optional[str] = None
+    supabase_jwt_secret: Optional[str] = None
+
+    # Z-Pay configuration (Payment Gateway)
+    zpay_pid: Optional[str] = None  # Merchant ID
+    zpay_key: Optional[str] = None  # Secret key for signature
+    zpay_notify_url: Optional[str] = None  # Webhook callback URL
+    zpay_return_url: Optional[str] = None  # Return URL after payment
+
+
+# ============== Auth & Credits Models ==============
+
+class TransactionType(str, Enum):
+    """Type of credit transaction."""
+    RECHARGE = "recharge"
+    CONSUMPTION = "consumption"
+    BONUS = "bonus"
+    REFUND = "refund"
+
+
+class PaymentStatus(str, Enum):
+    """Status of a payment order."""
+    PENDING = "pending"
+    PAID = "paid"
+    FAILED = "failed"
+    EXPIRED = "expired"
+
+
+class PaymentMethod(str, Enum):
+    """Payment method."""
+    WXPAY = "wxpay"
+    ALIPAY = "alipay"
+
+
+class UserCredits(BaseModel):
+    """User credits balance record."""
+    id: str  # UUID as string
+    credit_balance: int = Field(ge=0, default=10)
+    created_at: datetime
+
+
+class CreditTransaction(BaseModel):
+    """A single credit transaction record."""
+    id: str  # UUID as string
+    user_id: str
+    type: TransactionType
+    amount: int  # Positive for additions, negative for deductions
+    balance_after: int
+    description: str
+    related_order_id: Optional[str] = None
+    related_task_id: Optional[str] = None
+    created_at: datetime
+
+
+class PaymentOrder(BaseModel):
+    """A payment order record."""
+    id: str  # UUID as string
+    user_id: str
+    out_trade_no: str  # Unique order number for Z-Pay
+    amount: int = Field(gt=0, le=500)  # Payment amount in CNY
+    credits: int = Field(gt=0)  # Credits to be added (= amount)
+    status: PaymentStatus = PaymentStatus.PENDING
+    payment_method: Optional[PaymentMethod] = None
+    trade_no: Optional[str] = None  # Z-Pay transaction ID
+    created_at: datetime
+    paid_at: Optional[datetime] = None
+
+
+# Request/Response models for API endpoints
+
+class AuthRequest(BaseModel):
+    """Request body for login/register."""
+    email: str = Field(..., min_length=5, max_length=255)
+    password: str = Field(..., min_length=6, max_length=128)
+
+
+class AuthResponse(BaseModel):
+    """Response for successful login/register."""
+    user_id: str
+    email: str
+    credit_balance: int
+
+
+class UserInfoResponse(BaseModel):
+    """Response for GET /api/auth/me."""
+    user_id: str
+    email: str
+    credit_balance: int
+
+
+class BalanceResponse(BaseModel):
+    """Response for GET /api/credits/balance."""
+    balance: int
+
+
+class TransactionHistoryResponse(BaseModel):
+    """Response for GET /api/credits/transactions."""
+    transactions: List[CreditTransaction]
+    total: int
+
+
+class CreatePaymentRequest(BaseModel):
+    """Request body for creating a payment order."""
+    amount: int = Field(gt=0, le=500, description="Payment amount in CNY")
+    payment_method: PaymentMethod = PaymentMethod.ALIPAY
+
+
+class CreatePaymentResponse(BaseModel):
+    """Response for POST /api/payment/create."""
+    order_id: str
+    payment_url: str
+
+
+class PaymentOrderResponse(BaseModel):
+    """Response for GET /api/payment/orders/{id}."""
+    id: str
+    amount: int
+    credits: int
+    status: PaymentStatus
+    payment_method: Optional[PaymentMethod] = None
+    created_at: datetime
+    paid_at: Optional[datetime] = None
+
+
+class InsufficientCreditsError(BaseModel):
+    """Error response for insufficient credits."""
+    detail: str = "Insufficient credits"
+    required_credits: int
+    current_balance: int
+    credits_page_url: str = "/static/credits.html"
+
 
 # ============== History Feature Models ==============
 

@@ -124,6 +124,31 @@ async function downloadModel() {
   }
 }
 
+// Handle API error responses with auth/credits checking
+async function handleApiError(res, defaultMsg) {
+  if (res.status === 401) {
+    // Unauthorized - redirect to login
+    storeRedirectUrl()
+    window.location.href = '/login'
+    throw new Error('请先登录')
+  }
+  if (res.status === 402) {
+    // Insufficient credits - show error with link to credits page
+    throw new Error('积分不足，<a href="/static/credits.html">点击充值</a>')
+  }
+  // Try to get error message from response
+  try {
+    const data = await res.json()
+    throw new Error(data.detail || defaultMsg)
+  } catch (e) {
+    if (e.message.includes('积分不足') || e.message.includes('请先登录')) {
+      throw e
+    }
+    const text = await res.text().catch(() => '')
+    throw new Error(text || defaultMsg)
+  }
+}
+
 async function createTask(sourceUrl) {
   const res = await fetch('/tasks', {
     method: 'POST',
@@ -131,8 +156,7 @@ async function createTask(sourceUrl) {
     body: JSON.stringify({ source_url: sourceUrl })
   })
   if (!res.ok) {
-    const msg = await res.text()
-    throw new Error(msg || '请求失败')
+    await handleApiError(res, '请求失败')
   }
   return res.json()
 }
@@ -141,7 +165,9 @@ async function uploadTask(file) {
   const fd = new FormData()
   fd.append('file', file)
   const res = await fetch('/tasks/upload', { method: 'POST', body: fd })
-  if (!res.ok) { const msg = await res.text(); throw new Error(msg || '上传失败') }
+  if (!res.ok) {
+    await handleApiError(res, '上传失败')
+  }
   return res.json()
 }
 
@@ -155,8 +181,7 @@ async function startTranscribe(taskId, provider, modelName, prompt) {
   }
   const res = await fetch(`/tasks/${taskId}/transcribe?${params.toString()}`, { method: 'POST' })
   if (!res.ok) {
-    const msg = await res.text()
-    throw new Error(msg || '转写请求失败')
+    await handleApiError(res, '转写请求失败')
   }
   return res.json()
 }
@@ -187,14 +212,24 @@ async function fetchMarkdown(url) {
 
 function setDownloadError(text) {
   if (els.downloadError) {
-    els.downloadError.textContent = text
+    // Support HTML content for links (e.g., "积分不足，<a href='...'>点击充值</a>")
+    if (text && text.includes('<a ')) {
+      els.downloadError.innerHTML = text
+    } else {
+      els.downloadError.textContent = text
+    }
     els.downloadError.hidden = !text
   }
 }
 
 function setTranscribeError(text) {
   if (els.transcribeError) {
-    els.transcribeError.textContent = text
+    // Support HTML content for links (e.g., "积分不足，<a href='...'>点击充值</a>")
+    if (text && text.includes('<a ')) {
+      els.transcribeError.innerHTML = text
+    } else {
+      els.transcribeError.textContent = text
+    }
     els.transcribeError.hidden = !text
   }
 }
@@ -486,8 +521,7 @@ async function createDirectUrlTask(audioUrl, provider, modelName, prompt) {
     body: JSON.stringify(body)
   })
   if (!res.ok) {
-    const msg = await res.text()
-    throw new Error(msg || '转写请求失败')
+    await handleApiError(res, '转写请求失败')
   }
   return res.json()
 }
@@ -726,7 +760,87 @@ document.querySelectorAll('input[name="provider"]').forEach(radio => {
   radio.addEventListener('change', toggleProviderOptions)
 })
 
+// ===== Authentication =====
+const authEls = {
+  userMenu: document.getElementById('userMenu'),
+  userCredits: document.getElementById('userCredits'),
+  logoutBtn: document.getElementById('logoutBtn'),
+  loginLink: document.getElementById('loginLink'),
+}
+
+let currentUser = null
+
+// Check auth status and update UI
+async function checkAuth() {
+  try {
+    const response = await fetch('/api/auth/me')
+    if (response.ok) {
+      currentUser = await response.json()
+      updateAuthUI(true)
+    } else {
+      currentUser = null
+      updateAuthUI(false)
+    }
+  } catch (e) {
+    currentUser = null
+    updateAuthUI(false)
+  }
+}
+
+// Update UI based on auth state
+function updateAuthUI(isLoggedIn) {
+  if (isLoggedIn && currentUser) {
+    // Show user menu, hide login link
+    if (authEls.userMenu) authEls.userMenu.hidden = false
+    if (authEls.loginLink) authEls.loginLink.hidden = true
+    if (authEls.userCredits) authEls.userCredits.textContent = currentUser.credit_balance
+
+    // Store user in localStorage for quick access
+    localStorage.setItem('user', JSON.stringify(currentUser))
+  } else {
+    // Show login link, hide user menu
+    if (authEls.userMenu) authEls.userMenu.hidden = true
+    if (authEls.loginLink) authEls.loginLink.hidden = false
+
+    // Clear localStorage
+    localStorage.removeItem('user')
+  }
+}
+
+// Handle logout
+async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' })
+  } catch (e) {
+    // Ignore errors
+  }
+  currentUser = null
+  updateAuthUI(false)
+  // Redirect to homepage
+  window.location.href = '/'
+}
+
+// Store current URL before redirecting to login
+function storeRedirectUrl() {
+  const currentUrl = window.location.pathname + window.location.search
+  if (currentUrl !== '/login') {
+    sessionStorage.setItem('redirectAfterLogin', currentUrl)
+  }
+}
+
+// Event listeners for auth
+if (authEls.logoutBtn) {
+  authEls.logoutBtn.addEventListener('click', logout)
+}
+
+if (authEls.loginLink) {
+  authEls.loginLink.addEventListener('click', (e) => {
+    storeRedirectUrl()
+  })
+}
+
 // Initialize
 toggleProviderOptions()
 checkModelStatus()
 checkDirectAudioUrl()  // Check if URL was pre-filled
+checkAuth()  // Check authentication status

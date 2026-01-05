@@ -2,15 +2,25 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Response, UploadFile, File, Query
+from fastapi import FastAPI, BackgroundTasks, HTTPException, Response, UploadFile, File, Query, Depends
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from podscript_shared.config import load_config
+from podscript_api.routers import auth as auth_router
+from podscript_api.routers import credits as credits_router
+from podscript_api.routers import payment as payment_router
+from podscript_api.middleware.auth import get_current_user, get_current_user_optional, CurrentUser
+from podscript_api.routers.credits import (
+    calculate_credit_cost,
+    deduct_user_credits,
+    refund_user_credits,
+    get_user_balance,
+)
 from podscript_shared.models import (
     HistoryListResponse,
     HistoryRecord,
@@ -42,7 +52,15 @@ app = FastAPI(title="Podscript MVP API", version="0.1.0")
 cfg = load_config()
 logger.info("Podscript API initialized")
 
+# Include routers
+app.include_router(auth_router.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(credits_router.router, prefix="/api/credits", tags=["Credits"])
+app.include_router(payment_router.router, prefix="/api/payment", tags=["Payment"])
+
 TASKS: Dict[str, TaskDetail] = {}
+
+# Track task metadata (user_id, credits_deducted) - not exposed in API response
+TASK_METADATA: Dict[str, Dict[str, Any]] = {}
 
 
 def add_task_log(task_id: str, message: str, level: str = "info"):
@@ -167,6 +185,11 @@ app.mount("/static", StaticFiles(directory=str(ui_dir)), name="static")
 @app.get("/")
 async def root():
     return FileResponse(ui_dir / "index.html")
+
+
+@app.get("/login")
+async def login_page():
+    return FileResponse(ui_dir / "login.html")
 
 
 @app.get("/favicon.ico")
@@ -326,13 +349,22 @@ async def get_media_info(task_id: str):
 # ============== Task APIs ==============
 
 @app.post("/tasks", response_model=TaskSummary)
-async def create_task(req: TaskCreateRequest, bg: BackgroundTasks):
-    """Create a download task (step 1). Use POST /tasks/{id}/transcribe for step 2."""
+async def create_task(
+    req: TaskCreateRequest,
+    bg: BackgroundTasks,
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Create a download task (step 1). Use POST /tasks/{id}/transcribe for step 2.
+
+    Requires authentication. Credits are checked/deducted at transcribe step.
+    """
     task_id = uuid.uuid4().hex[:12]
-    logger.info(f"[{task_id}] Creating download task for URL: {req.source_url}")
+    logger.info(f"[{task_id}] Creating download task for URL: {req.source_url} (user: {current_user.user_id})")
     TASKS[task_id] = TaskDetail(id=task_id, status=TaskStatus.queued, progress=0.0)
     # Store source URL for history tracking
     TASK_SOURCES[task_id] = str(req.source_url)
+    # Store task metadata (user_id)
+    TASK_METADATA[task_id] = {"user_id": current_user.user_id, "credits_deducted": 0}
 
     def _download():
         try:
@@ -362,16 +394,36 @@ class TranscribeRequest(BaseModel):
     language: Optional[str] = None
 
 
+def _get_audio_duration(audio_path: str) -> float:
+    """Get audio duration in seconds using ffprobe."""
+    import subprocess
+    try:
+        result = subprocess.run(
+            ['ffprobe', '-v', 'quiet', '-show_entries', 'format=duration',
+             '-of', 'default=noprint_wrappers=1:nokey=1', audio_path],
+            capture_output=True, text=True, timeout=30
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return float(result.stdout.strip())
+    except Exception as e:
+        logger.warning(f"Could not get audio duration: {e}")
+    return 3600.0  # Default to 1 hour if can't determine
+
+
 @app.post("/tasks/{task_id}/transcribe", response_model=TaskSummary)
 async def transcribe_task(
     task_id: str,
     bg: BackgroundTasks,
+    current_user: CurrentUser = Depends(get_current_user),
     provider: str = Query(default=ASR_PROVIDER_WHISPER, description="ASR provider: 'whisper' or 'tingwu'"),
     model_name: Optional[str] = Query(default=None, description="Model name (for Whisper)"),
     language: Optional[str] = Query(default=None, description="Language code (e.g., 'zh', 'en')"),
     prompt: Optional[str] = Query(default=None, description="Custom prompt: Whisper uses it for vocabulary hints; Tingwu for LLM post-processing"),
 ):
     """Start transcription for a downloaded task (step 2).
+
+    Requires authentication and sufficient credits.
+    Credits are deducted at the start (1 credit per hour, rounded up, minimum 1).
 
     The prompt parameter works differently for each provider:
     - Whisper: initial_prompt for vocabulary/style hints (max ~900 chars)
@@ -383,12 +435,50 @@ async def transcribe_task(
     if not task:
         logger.warning(f"[{task_id}] Transcribe request for non-existent task")
         raise HTTPException(status_code=404, detail="Task not found")
+
+    # Verify task ownership
+    task_meta = TASK_METADATA.get(task_id, {})
+    if task_meta.get("user_id") and task_meta["user_id"] != current_user.user_id:
+        logger.warning(f"[{task_id}] User {current_user.user_id} attempted to transcribe task owned by {task_meta.get('user_id')}")
+        raise HTTPException(status_code=403, detail="You don't have permission to transcribe this task")
+
     if task.status != TaskStatus.downloaded:
         logger.warning(f"[{task_id}] Transcribe request with wrong status: {task.status}")
         raise HTTPException(status_code=400, detail=f"Task must be in 'downloaded' status, current: {task.status}")
     if not task.audio_path:
         logger.warning(f"[{task_id}] Transcribe request but no audio_path")
         raise HTTPException(status_code=400, detail="No audio file found for this task")
+
+    # Calculate credit cost based on audio duration
+    audio_duration = _get_audio_duration(task.audio_path)
+    credit_cost = calculate_credit_cost(audio_duration)
+    hours_str = f"{audio_duration/3600:.1f}小时"
+
+    logger.info(f"[{task_id}] Audio duration: {audio_duration:.0f}s, credit cost: {credit_cost}")
+    add_task_log(task_id, f"音频时长: {hours_str}, 预计消耗: {credit_cost} 积分")
+
+    # Check and deduct credits
+    try:
+        new_balance = await deduct_user_credits(
+            user_id=current_user.user_id,
+            amount=credit_cost,
+            task_id=task_id,
+            description=f"转写消费 ({hours_str})"
+        )
+        # Store credits_deducted for potential refund
+        if task_id in TASK_METADATA:
+            TASK_METADATA[task_id]["credits_deducted"] = credit_cost
+        else:
+            TASK_METADATA[task_id] = {"user_id": current_user.user_id, "credits_deducted": credit_cost}
+
+        logger.info(f"[{task_id}] Deducted {credit_cost} credits from user {current_user.user_id}, new balance: {new_balance}")
+        add_task_log(task_id, f"已扣除 {credit_cost} 积分，剩余: {new_balance}")
+    except HTTPException:
+        # Re-raise HTTP exceptions (e.g., 402 insufficient credits)
+        raise
+    except Exception as e:
+        logger.error(f"[{task_id}] Credit deduction failed: {e}")
+        raise HTTPException(status_code=500, detail="积分扣除失败，请稍后重试")
 
     provider_name = "Whisper 离线" if provider == ASR_PROVIDER_WHISPER else "通义听悟"
     logger.info(f"[{task_id}] Starting transcription with {provider_name}: {task.audio_path}")
@@ -446,6 +536,33 @@ async def transcribe_task(
             add_task_log(task_id, f"转写失败: {str(e)}", "error")
             TASKS[task_id].status = TaskStatus.failed
             TASKS[task_id].error = {"message": str(e)}
+
+            # Refund credits on failure
+            meta = TASK_METADATA.get(task_id, {})
+            credits_to_refund = meta.get("credits_deducted", 0)
+            user_id = meta.get("user_id")
+
+            if credits_to_refund > 0 and user_id:
+                try:
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        new_balance = loop.run_until_complete(refund_user_credits(
+                            user_id=user_id,
+                            amount=credits_to_refund,
+                            task_id=task_id,
+                            description=f"转写失败退款"
+                        ))
+                        logger.info(f"[{task_id}] Refunded {credits_to_refund} credits to user {user_id}, new balance: {new_balance}")
+                        add_task_log(task_id, f"已退还 {credits_to_refund} 积分")
+                        # Clear credits_deducted to prevent double refund
+                        TASK_METADATA[task_id]["credits_deducted"] = 0
+                    finally:
+                        loop.close()
+                except Exception as refund_error:
+                    logger.error(f"[{task_id}] Failed to refund credits: {refund_error}")
+                    add_task_log(task_id, f"积分退款失败，请联系客服", "error")
 
     bg.add_task(_transcribe)
     return TaskSummary(id=task_id, status=TaskStatus.transcribing, progress=0.6)
@@ -612,11 +729,21 @@ def _parse_markdown_transcript(md_path: Path) -> List[TranscriptSegmentResponse]
 
 
 @app.post("/tasks/upload", response_model=TaskSummary)
-async def upload_task(file: UploadFile = File(...), bg: BackgroundTasks = BackgroundTasks()):
-    """Upload a local audio/video file (step 1). Use POST /tasks/{id}/transcribe for step 2."""
+async def upload_task(
+    file: UploadFile = File(...),
+    bg: BackgroundTasks = BackgroundTasks(),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """Upload a local audio/video file (step 1). Use POST /tasks/{id}/transcribe for step 2.
+
+    Requires authentication. Credits are checked/deducted at transcribe step.
+    """
     task_id = uuid.uuid4().hex[:12]
-    logger.info(f"[{task_id}] Uploading file: {file.filename}")
+    logger.info(f"[{task_id}] Uploading file: {file.filename} (user: {current_user.user_id})")
     TASKS[task_id] = TaskDetail(id=task_id, status=TaskStatus.queued, progress=0.0)
+    # Store task metadata (user_id)
+    TASK_METADATA[task_id] = {"user_id": current_user.user_id, "credits_deducted": 0}
+
     task_dir = Path(cfg.artifacts_dir) / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
     destination = task_dir / file.filename
@@ -650,9 +777,16 @@ class DirectUrlTranscribeRequest(BaseModel):
 
 
 @app.post("/tasks/transcribe-url", response_model=TaskSummary)
-async def transcribe_url(req: DirectUrlTranscribeRequest, bg: BackgroundTasks):
+async def transcribe_url(
+    req: DirectUrlTranscribeRequest,
+    bg: BackgroundTasks,
+    current_user: CurrentUser = Depends(get_current_user),
+):
     """
     Transcribe audio directly from a public URL (skips cloud upload).
+
+    Requires authentication and deducts 1 credit minimum.
+    For longer audio, additional credits may be charged based on duration.
 
     This is useful when:
     - Audio is already uploaded to OSS/COS with a valid signed URL
@@ -666,13 +800,39 @@ async def transcribe_url(req: DirectUrlTranscribeRequest, bg: BackgroundTasks):
     task_id = uuid.uuid4().hex[:12]
     provider_name = "Whisper 离线" if req.provider == ASR_PROVIDER_WHISPER else "通义听悟"
 
-    logger.info(f"[{task_id}] Creating direct URL transcription task with {provider_name}")
+    logger.info(f"[{task_id}] Creating direct URL transcription task with {provider_name} (user: {current_user.user_id})")
     logger.info(f"[{task_id}] Audio URL: {req.audio_url[:80]}...")
 
     TASKS[task_id] = TaskDetail(id=task_id, status=TaskStatus.transcribing, progress=0.1)
     task_dir = Path(cfg.artifacts_dir) / task_id
     task_dir.mkdir(parents=True, exist_ok=True)
 
+    # Store task metadata
+    TASK_METADATA[task_id] = {"user_id": current_user.user_id, "credits_deducted": 0}
+
+    # Deduct 1 credit minimum upfront (can't determine duration before download)
+    credit_cost = 1
+    try:
+        new_balance = await deduct_user_credits(
+            user_id=current_user.user_id,
+            amount=credit_cost,
+            task_id=task_id,
+            description=f"直链转写消费"
+        )
+        TASK_METADATA[task_id]["credits_deducted"] = credit_cost
+        logger.info(f"[{task_id}] Deducted {credit_cost} credits, new balance: {new_balance}")
+    except HTTPException:
+        # Clean up task if credit deduction fails
+        del TASKS[task_id]
+        del TASK_METADATA[task_id]
+        raise
+    except Exception as e:
+        logger.error(f"[{task_id}] Credit deduction failed: {e}")
+        del TASKS[task_id]
+        del TASK_METADATA[task_id]
+        raise HTTPException(status_code=500, detail="积分扣除失败，请稍后重试")
+
+    add_task_log(task_id, f"已扣除 {credit_cost} 积分")
     add_task_log(task_id, f"开始转写任务 (使用 {provider_name})...")
     add_task_log(task_id, f"音频链接: {req.audio_url[:50]}...")
     if req.prompt:
@@ -795,6 +955,32 @@ async def transcribe_url(req: DirectUrlTranscribeRequest, bg: BackgroundTasks):
             add_task_log(task_id, f"转写失败: {str(e)}", "error")
             TASKS[task_id].status = TaskStatus.failed
             TASKS[task_id].error = {"message": str(e)}
+
+            # Refund credits on failure
+            meta = TASK_METADATA.get(task_id, {})
+            credits_to_refund = meta.get("credits_deducted", 0)
+            user_id = meta.get("user_id")
+
+            if credits_to_refund > 0 and user_id:
+                try:
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    try:
+                        new_balance = loop.run_until_complete(refund_user_credits(
+                            user_id=user_id,
+                            amount=credits_to_refund,
+                            task_id=task_id,
+                            description=f"直链转写失败退款"
+                        ))
+                        logger.info(f"[{task_id}] Refunded {credits_to_refund} credits to user {user_id}")
+                        add_task_log(task_id, f"已退还 {credits_to_refund} 积分")
+                        TASK_METADATA[task_id]["credits_deducted"] = 0
+                    finally:
+                        loop.close()
+                except Exception as refund_error:
+                    logger.error(f"[{task_id}] Failed to refund credits: {refund_error}")
+                    add_task_log(task_id, f"积分退款失败，请联系客服", "error")
 
     bg.add_task(_transcribe)
     return TaskSummary(id=task_id, status=TaskStatus.transcribing, progress=0.1)

@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>支付成功 - Podscript</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        .success-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: var(--space-8) var(--space-6);
+            min-height: calc(100vh - 120px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        .success-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #22c55e, #16a34a);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: var(--space-6);
+        }
+
+        .success-icon svg {
+            width: 40px;
+            height: 40px;
+            color: white;
+        }
+
+        .success-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--space-2);
+        }
+
+        .success-message {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-bottom: var(--space-8);
+        }
+
+        .balance-display {
+            background: var(--bg-secondary);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6) var(--space-8);
+            margin-bottom: var(--space-8);
+        }
+
+        .balance-label {
+            font-size: 14px;
+            color: var(--text-tertiary);
+            margin-bottom: var(--space-2);
+        }
+
+        .balance-value {
+            font-size: 36px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .balance-unit {
+            font-size: 16px;
+            color: var(--text-secondary);
+            margin-left: var(--space-1);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: var(--space-4);
+        }
+
+        .action-btn {
+            padding: var(--space-3) var(--space-6);
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-default);
+            text-decoration: none;
+        }
+
+        .action-btn-primary {
+            background: var(--bg-dark);
+            color: var(--text-inverse);
+            border: none;
+        }
+
+        .action-btn-primary:hover {
+            background: #2a2a29;
+        }
+
+        .action-btn-secondary {
+            background: white;
+            color: var(--text-body);
+            border: 1px solid var(--border);
+        }
+
+        .action-btn-secondary:hover {
+            border-color: var(--text-tertiary);
+        }
+
+        .loading-state {
+            color: var(--text-tertiary);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <a href="/" class="logo">
+                <div class="logo-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                </div>
+                <span class="logo-text">Podscript</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Success Container -->
+    <div class="success-container">
+        <div class="success-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        </div>
+
+        <h1 class="success-title">支付成功</h1>
+        <p class="success-message">积分已充值到您的账户</p>
+
+        <div class="balance-display">
+            <div class="balance-label">当前积分余额</div>
+            <div>
+                <span class="balance-value" id="currentBalance">--</span>
+                <span class="balance-unit">积分</span>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <a href="/" class="action-btn action-btn-primary">开始转写</a>
+            <a href="/static/credits.html" class="action-btn action-btn-secondary">继续充值</a>
+        </div>
+    </div>
+
+    <script>
+        // Load current balance
+        async function loadBalance() {
+            try {
+                const response = await fetch('/api/credits/balance');
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('currentBalance').textContent = data.balance;
+                }
+            } catch (error) {
+                console.error('Failed to load balance:', error);
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', loadBalance);
+    </script>
+</body>
+</html>

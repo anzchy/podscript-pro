@@ -45,4 +45,14 @@ def load_config() -> AppConfig:
         qwen_api_key=os.getenv("QWEN_API_KEY"),
         tingwu_app_key=(os.getenv("TINGWU_APP_KEY") or "").strip() or None,
         artifacts_dir=artifacts_dir,
+        # Supabase configuration
+        supabase_url=(os.getenv("SUPABASE_URL") or "").strip() or None,
+        supabase_anon_key=(os.getenv("SUPABASE_ANON_KEY") or "").strip() or None,
+        supabase_service_role_key=(os.getenv("SUPABASE_SERVICE_ROLE_KEY") or "").strip() or None,
+        supabase_jwt_secret=(os.getenv("SUPABASE_JWT_SECRET") or "").strip() or None,
+        # Z-Pay configuration
+        zpay_pid=(os.getenv("ZPAY_PID") or "").strip() or None,
+        zpay_key=(os.getenv("ZPAY_KEY") or "").strip() or None,
+        zpay_notify_url=(os.getenv("ZPAY_NOTIFY_URL") or "").strip() or None,
+        zpay_return_url=(os.getenv("ZPAY_RETURN_URL") or "").strip() or None,
     )

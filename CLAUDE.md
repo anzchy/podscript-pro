@@ -50,7 +50,15 @@ Three modular packages under `src/`:
 src/
 ├── podscript_api/         # FastAPI gateway
 │   ├── main.py            # API endpoints, task management, static file serving
+│   ├── routers/           # API route modules
+│   │   ├── auth.py        # Authentication endpoints (register/login/logout)
+│   │   ├── credits.py     # Credits balance and transactions
+│   │   └── payment.py     # Z-Pay payment integration
+│   ├── middleware/        # Middleware components
+│   │   └── auth.py        # JWT validation (get_current_user, get_current_user_optional)
 │   └── static/            # Frontend UI (HTML/JS/CSS)
+│       ├── login.html     # Login/register page
+│       └── login.js       # Auth form handling
 ├── podscript_pipeline/    # Processing pipeline
 │   ├── pipeline.py        # Orchestrates: download → preprocess → transcribe → format
 │   ├── download.py        # URL download, YouTube via yt-dlp
@@ -63,7 +71,9 @@ src/
 │   └── formatters.py      # SRT/Markdown generation
 └── podscript_shared/      # Shared utilities
     ├── models.py          # Pydantic models (TaskStatus, TaskDetail, AppConfig, etc.)
-    └── config.py          # Environment config loader (.env support)
+    ├── config.py          # Environment config loader (.env support)
+    ├── supabase.py        # Supabase client (anon + service role)
+    └── logging.py         # Structured payment logger
 ```
 
 **Two-Step Workflow:**
@@ -83,6 +93,9 @@ src/
 - **YouTube handling** requires:
   - `yt-dlp`, `ffmpeg`, and `deno` installed (`brew install ffmpeg deno` on macOS)
   - Browser cookies for authentication (defaults to Chrome, set `YTDLP_COOKIES_BROWSER=safari` for Safari)
+- **Auth pattern**: Cookie-based JWT auth with httponly, samesite=lax
+- **Supabase clients**: `get_supabase_client()` for user ops, `get_supabase_admin_client()` for webhooks (bypasses RLS)
+- **Payment webhook**: MD5 signature verification, idempotent processing, structured JSON logging
 
 ## Environment Variables (.env)
 
@@ -99,7 +112,22 @@ TINGWU_ENABLED=1
 
 Get `TINGWU_APP_KEY` from: https://tingwu.console.aliyun.com/
 
-Optional:
+Optional for Supabase Auth + Z-Pay Payment:
+```
+# Supabase (user auth and data storage)
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_ANON_KEY=eyJ...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...
+SUPABASE_JWT_SECRET=your-jwt-secret
+
+# Z-Pay (payment gateway)
+ZPAY_PID=merchant_id
+ZPAY_KEY=secret_key
+ZPAY_NOTIFY_URL=https://your-domain.com/api/payment/webhook
+ZPAY_RETURN_URL=https://your-domain.com/static/payment-success.html
+```
+
+Other optional:
 - `ARTIFACTS_DIR` — output directory (default: `artifacts`)
 - `ALIBABA_CLOUD_SECURITY_TOKEN` — for STS temporary credentials
 
@@ -122,9 +150,24 @@ Optional:
 - `GET /asr/whisper/models` — Get Whisper models and download status
 - `POST /asr/whisper/download` — Download a Whisper model
 
+**Authentication (optional, requires Supabase):**
+- `POST /api/auth/register` — Register new user (grants 10 bonus credits)
+- `POST /api/auth/login` — Login, sets httponly cookie
+- `POST /api/auth/logout` — Logout, clears cookie
+- `GET /api/auth/me` — Get current user info and credits
+
+**Credits (requires auth):**
+- `GET /api/credits/balance` — Get credit balance
+- `GET /api/credits/transactions` — Get transaction history
+
+**Payment (requires auth + Z-Pay):**
+- `POST /api/payment/create` — Create payment order
+- `POST /api/payment/webhook` — Z-Pay async callback
+
 **Static Files:**
 - `GET /artifacts/{id}/*` — Serve output files (SRT, Markdown, audio)
 - `GET /` — Web UI
+- `GET /login` — Login page
 
 ## Testing Notes
 
@@ -133,10 +176,11 @@ Optional:
 - Tests use `httpx.AsyncClient` with FastAPI's `TestClient`
 
 ## Active Technologies
-- Python 3.10-3.12 + FastAPI, Pydantic, yt-dlp, openai-whisper (002-add-transcribe-history)
-- JSON 文件 (`artifacts/history.json`) + 任务目录 (`artifacts/{task_id}/`) (002-add-transcribe-history)
-- Python 3.10-3.12 (per pyproject.toml) + FastAPI 0.115+, Pydantic 2.8+, Supabase Python SDK (new), httpx (003-add-supabase-and-payment)
-- Supabase PostgreSQL (new - users_credits, credit_transactions, payment_orders tables) (003-add-supabase-and-payment)
+- Python 3.10-3.12 + FastAPI, Pydantic, yt-dlp, openai-whisper
+- JSON 文件 (`artifacts/history.json`) + 任务目录 (`artifacts/{task_id}/`)
+- Supabase Python SDK + PyJWT (auth), gotrue (error handling)
+- Supabase PostgreSQL: users_credits, credit_transactions, payment_orders tables
 
 ## Recent Changes
-- 002-add-transcribe-history: Added Python 3.10-3.12 + FastAPI, Pydantic, yt-dlp, openai-whisper
+- 003-add-supabase-and-payment: Added user auth (register/login/logout), credits system, Z-Pay payment integration
+- 002-add-transcribe-history: Added transcription history tracking with persistent storage
