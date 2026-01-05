@@ -3,7 +3,10 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from gotrue.errors import AuthApiError
+try:
+    from gotrue.errors import AuthApiError
+except ImportError:
+    from supabase_auth.errors import AuthApiError
 
 from podscript_shared.models import AuthRequest, AuthResponse
 from podscript_shared.supabase import get_supabase_client, get_supabase_admin_client
