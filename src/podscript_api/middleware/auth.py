@@ -1,12 +1,20 @@
 """JWT authentication middleware for FastAPI."""
 
+import logging
 from typing import Optional, Dict, Any
 
+import httpx
 import jwt
+from jwt import PyJWKClient
 from fastapi import Cookie, HTTPException, status
 
 from podscript_shared.config import load_config
 from podscript_shared.supabase import get_supabase_admin_client
+
+logger = logging.getLogger(__name__)
+
+# Cache for JWKS client
+_jwks_client: Optional[PyJWKClient] = None
 
 
 class AuthError(HTTPException):
@@ -27,9 +35,21 @@ class CurrentUser:
         return f"CurrentUser(user_id={self.user_id}, email={self.email})"
 
 
+def _get_jwks_client(supabase_url: str) -> PyJWKClient:
+    """Get or create a cached JWKS client for the Supabase project."""
+    global _jwks_client
+    if _jwks_client is None:
+        jwks_url = f"{supabase_url}/auth/v1/.well-known/jwks.json"
+        logger.info(f"Initializing JWKS client from: {jwks_url}")
+        _jwks_client = PyJWKClient(jwks_url)
+    return _jwks_client
+
+
 def _decode_jwt(token: str) -> Dict[str, Any]:
     """
     Decode and validate a Supabase JWT token.
+
+    Supports both HS256 (symmetric, uses JWT secret) and ES256 (asymmetric, uses JWKS).
 
     Args:
         token: The JWT token to decode.
@@ -42,23 +62,59 @@ def _decode_jwt(token: str) -> Dict[str, Any]:
     """
     config = load_config()
 
-    if not config.supabase_jwt_secret:
-        raise AuthError("Authentication not configured")
+    # First, decode header to see the algorithm (without verification)
+    try:
+        header = jwt.get_unverified_header(token)
+        token_alg = header.get("alg", "unknown")
+        logger.debug(f"JWT token algorithm: {token_alg}")
+    except Exception as e:
+        logger.warning(f"Could not read JWT header: {e}")
+        raise AuthError("Invalid token format")
 
     try:
-        payload = jwt.decode(
-            token,
-            config.supabase_jwt_secret,
-            algorithms=["HS256"],
-            audience="authenticated",
-        )
+        if token_alg == "ES256":
+            # ES256 uses asymmetric keys - fetch public key from JWKS
+            if not config.supabase_url:
+                logger.error("JWT validation failed: SUPABASE_URL not configured for ES256")
+                raise AuthError("Authentication not configured")
+
+            jwks_client = _get_jwks_client(config.supabase_url)
+            signing_key = jwks_client.get_signing_key_from_jwt(token)
+
+            payload = jwt.decode(
+                token,
+                signing_key.key,
+                algorithms=["ES256"],
+                audience="authenticated",
+            )
+        else:
+            # HS256/RS256 uses the JWT secret
+            if not config.supabase_jwt_secret:
+                logger.error("JWT validation failed: SUPABASE_JWT_SECRET not configured")
+                raise AuthError("Authentication not configured")
+
+            payload = jwt.decode(
+                token,
+                config.supabase_jwt_secret,
+                algorithms=["HS256", "RS256"],
+                audience="authenticated",
+            )
+
+        logger.debug(f"JWT decoded successfully for user: {payload.get('sub')}")
         return payload
+
     except jwt.ExpiredSignatureError:
-        raise AuthError("Token has expired")
+        logger.warning("JWT validation failed: Token has expired")
+        raise AuthError("登录已过期，请重新登录")
     except jwt.InvalidAudienceError:
+        logger.warning("JWT validation failed: Invalid audience")
         raise AuthError("Invalid token audience")
     except jwt.InvalidTokenError as e:
+        logger.warning(f"JWT validation failed: {str(e)}")
         raise AuthError(f"Invalid token: {str(e)}")
+    except Exception as e:
+        logger.error(f"JWT validation error: {str(e)}")
+        raise AuthError("Authentication failed")
 
 
 async def get_current_user(
@@ -76,7 +132,8 @@ async def get_current_user(
             return {"user_id": user.user_id}
     """
     if not access_token:
-        raise AuthError("Not authenticated")
+        logger.warning("Auth failed: No access_token cookie received")
+        raise AuthError("未登录或登录已过期")
 
     payload = _decode_jwt(access_token)
 
@@ -136,9 +193,9 @@ async def get_user_credits(user_id: str) -> int:
         return 0
 
     try:
-        response = client.table("users_credits").select("credit_balance").eq("id", user_id).single().execute()
+        response = client.table("users_credits").select("balance").eq("id", user_id).single().execute()
         if response.data:
-            return response.data.get("credit_balance", 0)
+            return response.data.get("balance", 0)
         return 0
     except Exception:
         return 0

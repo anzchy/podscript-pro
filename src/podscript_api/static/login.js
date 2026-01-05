@@ -93,6 +93,7 @@ loginForm.addEventListener('submit', async (e) => {
             headers: {
                 'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: JSON.stringify({ email, password }),
         });
 
@@ -157,6 +158,7 @@ registerForm.addEventListener('submit', async (e) => {
             headers: {
                 'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: JSON.stringify({ email, password }),
         });
 
@@ -191,7 +193,9 @@ registerForm.addEventListener('submit', async (e) => {
 // Check if user is already logged in
 async function checkAuth() {
     try {
-        const response = await fetch('/api/auth/me');
+        const response = await fetch('/api/auth/me', {
+            credentials: 'include',
+        });
         if (response.ok) {
             // User is already logged in, redirect to homepage
             window.location.href = getRedirectUrl();

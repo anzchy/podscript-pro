@@ -49,7 +49,7 @@ async def get_balance(
 
     try:
         result = client.table("users_credits").select("balance").eq(
-            "user_id", current_user.id
+            "id", current_user.user_id
         ).single().execute()
 
         if result.data:
@@ -78,13 +78,13 @@ async def get_transactions(
     try:
         # Get transactions with pagination
         result = client.table("credit_transactions").select("*").eq(
-            "user_id", current_user.id
+            "user_id", current_user.user_id
         ).order("created_at", desc=True).range(offset, offset + limit - 1).execute()
 
         # Get total count
         count_result = client.table("credit_transactions").select(
             "id", count="exact"
-        ).eq("user_id", current_user.id).execute()
+        ).eq("user_id", current_user.user_id).execute()
 
         total = count_result.count if count_result.count else 0
 
@@ -151,7 +151,7 @@ async def get_user_balance(user_id: str) -> int:
 
     try:
         result = client.table("users_credits").select("balance").eq(
-            "user_id", user_id
+            "id", user_id
         ).single().execute()
 
         if result.data:
@@ -270,7 +270,7 @@ async def _manual_deduct_credits(
     """Manual credit deduction fallback when RPC is not available."""
     # Get current balance
     balance_result = client.table("users_credits").select("balance").eq(
-        "user_id", user_id
+        "id", user_id
     ).single().execute()
 
     if not balance_result.data:
@@ -286,7 +286,7 @@ async def _manual_deduct_credits(
     # Update balance
     client.table("users_credits").update({
         "balance": new_balance
-    }).eq("user_id", user_id).execute()
+    }).eq("id", user_id).execute()
 
     # Record transaction
     client.table("credit_transactions").insert({
@@ -311,7 +311,7 @@ async def _manual_refund_credits(
     """Manual credit refund fallback when RPC is not available."""
     # Get current balance
     balance_result = client.table("users_credits").select("balance").eq(
-        "user_id", user_id
+        "id", user_id
     ).single().execute()
 
     current_balance = balance_result.data.get("balance", 0) if balance_result.data else 0
@@ -320,7 +320,7 @@ async def _manual_refund_credits(
     # Update balance
     client.table("users_credits").update({
         "balance": new_balance
-    }).eq("user_id", user_id).execute()
+    }).eq("id", user_id).execute()
 
     # Record transaction
     client.table("credit_transactions").insert({

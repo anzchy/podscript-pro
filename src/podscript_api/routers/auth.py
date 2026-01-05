@@ -40,9 +40,9 @@ def _get_user_credits(user_id: str) -> int:
         return 0
 
     try:
-        result = client.table("users_credits").select("credit_balance").eq("id", user_id).single().execute()
+        result = client.table("users_credits").select("balance").eq("id", user_id).single().execute()
         if result.data:
-            return result.data.get("credit_balance", 0)
+            return result.data.get("balance", 0)
         return 0
     except Exception:
         return 0

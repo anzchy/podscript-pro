@@ -157,7 +157,9 @@
         // Load current balance
         async function loadBalance() {
             try {
-                const response = await fetch('/api/credits/balance');
+                const response = await fetch('/api/credits/balance', {
+                    credentials: 'include',
+                });
                 if (response.ok) {
                     const data = await response.json();
                     document.getElementById('currentBalance').textContent = data.balance;

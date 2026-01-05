@@ -153,6 +153,7 @@ async function createTask(sourceUrl) {
   const res = await fetch('/tasks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify({ source_url: sourceUrl })
   })
   if (!res.ok) {
@@ -164,7 +165,7 @@ async function createTask(sourceUrl) {
 async function uploadTask(file) {
   const fd = new FormData()
   fd.append('file', file)
-  const res = await fetch('/tasks/upload', { method: 'POST', body: fd })
+  const res = await fetch('/tasks/upload', { method: 'POST', credentials: 'include', body: fd })
   if (!res.ok) {
     await handleApiError(res, '上传失败')
   }
@@ -179,7 +180,7 @@ async function startTranscribe(taskId, provider, modelName, prompt) {
   if (prompt && prompt.trim()) {
     params.append('prompt', prompt.trim())
   }
-  const res = await fetch(`/tasks/${taskId}/transcribe?${params.toString()}`, { method: 'POST' })
+  const res = await fetch(`/tasks/${taskId}/transcribe?${params.toString()}`, { method: 'POST', credentials: 'include' })
   if (!res.ok) {
     await handleApiError(res, '转写请求失败')
   }
@@ -518,6 +519,7 @@ async function createDirectUrlTask(audioUrl, provider, modelName, prompt) {
   const res = await fetch('/tasks/transcribe-url', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(body)
   })
   if (!res.ok) {
@@ -773,7 +775,9 @@ let currentUser = null
 // Check auth status and update UI
 async function checkAuth() {
   try {
-    const response = await fetch('/api/auth/me')
+    const response = await fetch('/api/auth/me', {
+      credentials: 'include',
+    })
     if (response.ok) {
       currentUser = await response.json()
       updateAuthUI(true)
@@ -810,7 +814,7 @@ function updateAuthUI(isLoggedIn) {
 // Handle logout
 async function logout() {
   try {
-    await fetch('/api/auth/logout', { method: 'POST' })
+    await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
   } catch (e) {
     // Ignore errors
   }

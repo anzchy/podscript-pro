@@ -52,7 +52,9 @@ async function init() {
 // Auth check
 async function checkAuth() {
     try {
-        const response = await fetch('/api/auth/me');
+        const response = await fetch('/api/auth/me', {
+            credentials: 'include',
+        });
         if (response.ok) {
             const data = await response.json();
             currentUser = data;
@@ -82,7 +84,7 @@ function updateAuthUI(isLoggedIn) {
 function setupLogout() {
     logoutBtnEl.addEventListener('click', async () => {
         try {
-            await fetch('/api/auth/logout', { method: 'POST' });
+            await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' });
             window.location.href = '/';
         } catch (error) {
             console.error('Logout failed:', error);
@@ -93,7 +95,9 @@ function setupLogout() {
 // Load balance
 async function loadBalance() {
     try {
-        const response = await fetch('/api/credits/balance');
+        const response = await fetch('/api/credits/balance', {
+            credentials: 'include',
+        });
         if (response.ok) {
             const data = await response.json();
             currentBalance = data.balance;
@@ -111,7 +115,9 @@ async function loadBalance() {
 // Load transactions
 async function loadTransactions() {
     try {
-        const response = await fetch('/api/credits/transactions?limit=20');
+        const response = await fetch('/api/credits/transactions?limit=20', {
+            credentials: 'include',
+        });
         historyLoadingEl.style.display = 'none';
 
         if (response.ok) {
@@ -261,6 +267,7 @@ async function createPayment() {
             headers: {
                 'Content-Type': 'application/json',
             },
+            credentials: 'include',
             body: JSON.stringify({
                 amount: selectedAmount,
                 pay_type: selectedMethod,

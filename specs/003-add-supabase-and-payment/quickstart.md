@@ -32,7 +32,7 @@ pip freeze > requirements.txt
 
 ### 2.2 Run Database Migrations
 
-In Supabase Dashboard → SQL Editor, run the migration script from `data-model.md`:
+In Supabase Dashboard → SQL Editor, 复制并执行 `specs/003-add-supabase-and-payment/migration.sql`:
 
 ```sql
 -- See specs/003-add-supabase-and-payment/data-model.md for full script
