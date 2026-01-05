@@ -95,7 +95,7 @@ async def create_payment(
     try:
         client.table("payment_orders").insert({
             "id": order_id,
-            "user_id": current_user.id,
+            "user_id": current_user.user_id,
             "out_trade_no": out_trade_no,
             "amount": request.amount,
             "credits": request.amount,  # 1 CNY = 1 credit
@@ -180,20 +180,20 @@ async def payment_webhook(request: Request) -> Response:
         credits = order["credits"]
         user_id = order["user_id"]
 
-        # Get current balance
+        # Get current balance (users_credits.id = user_id)
         balance_result = client.table("users_credits").select("balance").eq(
-            "user_id", user_id
+            "id", user_id
         ).single().execute()
 
         if balance_result.data:
             new_balance = balance_result.data["balance"] + credits
             client.table("users_credits").update({
                 "balance": new_balance,
-            }).eq("user_id", user_id).execute()
+            }).eq("id", user_id).execute()
         else:
             new_balance = credits
             client.table("users_credits").insert({
-                "user_id": user_id,
+                "id": user_id,
                 "balance": new_balance,
             }).execute()
 
@@ -226,7 +226,7 @@ async def get_order(
     try:
         result = client.table("payment_orders").select("*").eq(
             "id", order_id
-        ).eq("user_id", current_user.id).single().execute()
+        ).eq("user_id", current_user.user_id).single().execute()
 
         if not result.data:
             raise HTTPException(status_code=404, detail="Order not found")

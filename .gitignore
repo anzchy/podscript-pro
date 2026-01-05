@@ -92,3 +92,4 @@ dmypy.json
 logs/
 .specify/templates/tasks-template.md
 /.specify
+cookies.txt
