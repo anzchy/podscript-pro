@@ -46,7 +46,7 @@ def generate_zpay_signature(params: dict, secret_key: str) -> str:
     Algorithm:
     1. Sort parameters alphabetically (exclude sign, sign_type, empty values)
     2. Concatenate as key1=value1&key2=value2...
-    3. Append secret key: ...&key=SECRET_KEY
+    3. Append secret key directly (no &key= prefix)
     4. MD5 hash, lowercase
     """
     # Sort parameters, excluding sign and sign_type
@@ -58,8 +58,8 @@ def generate_zpay_signature(params: dict, secret_key: str) -> str:
     # Build query string
     query_string = "&".join(f"{k}={v}" for k, v in sorted_params)
 
-    # Append secret key
-    sign_string = f"{query_string}&key={secret_key}"
+    # Append secret key directly (Z-Pay format)
+    sign_string = f"{query_string}{secret_key}"
 
     # MD5 hash
     return hashlib.md5(sign_string.encode()).hexdigest().lower()
