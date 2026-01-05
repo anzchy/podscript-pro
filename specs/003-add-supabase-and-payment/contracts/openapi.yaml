@@ -1,0 +1,595 @@
+openapi: 3.1.0
+info:
+  title: Podscript Auth & Payment API
+  description: API endpoints for user authentication, credits management, and payment integration
+  version: 1.0.0
+  contact:
+    name: Podscript
+servers:
+  - url: http://localhost:8001
+    description: Development server
+  - url: https://your-domain.com
+    description: Production server
+
+tags:
+  - name: Auth
+    description: User authentication (login, register, logout)
+  - name: Credits
+    description: Credit balance and transaction history
+  - name: Payment
+    description: Payment creation and webhook handling
+  - name: Transcription
+    description: Transcription endpoints (updated with auth)
+
+paths:
+  # ============ AUTH ENDPOINTS ============
+  /api/auth/register:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      description: Create a new account with email and password. Grants 10 free credits.
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Sets access_token cookie
+        '400':
+          description: Invalid email or password format
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email already registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/login:
+    post:
+      tags: [Auth]
+      summary: Login existing user
+      description: Authenticate with email and password
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Sets access_token cookie
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout current user
+      description: Clear session and cookies
+      operationId: logout
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: "Logged out successfully"
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: Clears access_token cookie
+
+  /api/auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user info
+      description: Returns current user's email and credit balance
+      operationId: getCurrentUser
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: User info retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserInfoResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============ CREDITS ENDPOINTS ============
+  /api/credits/balance:
+    get:
+      tags: [Credits]
+      summary: Get credit balance
+      description: Returns current user's credit balance
+      operationId: getCreditBalance
+      security:
+        - cookieAuth: []
+      responses:
+        '200':
+          description: Balance retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/credits/transactions:
+    get:
+      tags: [Credits]
+      summary: Get transaction history
+      description: Returns paginated list of credit transactions
+      operationId: getTransactionHistory
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Number of transactions to return
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+          description: Offset for pagination
+      responses:
+        '200':
+          description: Transactions retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionHistoryResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============ PAYMENT ENDPOINTS ============
+  /api/payment/create:
+    post:
+      tags: [Payment]
+      summary: Create payment order
+      description: Create a new payment order and return Z-Pay payment URL
+      operationId: createPayment
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '201':
+          description: Payment order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatePaymentResponse'
+        '400':
+          description: Invalid amount (must be 1-500 CNY)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/payment/webhook:
+    post:
+      tags: [Payment]
+      summary: Z-Pay webhook callback
+      description: |
+        Receives payment notification from Z-Pay.
+        Verifies signature and updates order status.
+        **Note**: This endpoint is called by Z-Pay, not by the frontend.
+      operationId: paymentWebhook
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/WebhookPayload'
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "success"
+        '400':
+          description: Invalid signature or payload
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "fail"
+
+  /api/payment/orders/{order_id}:
+    get:
+      tags: [Payment]
+      summary: Get payment order status
+      description: Check status of a specific payment order
+      operationId: getPaymentOrder
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: order_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Order status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentOrderResponse'
+        '404':
+          description: Order not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ============ TRANSCRIPTION ENDPOINTS (UPDATED) ============
+  /tasks:
+    post:
+      tags: [Transcription]
+      summary: Create transcription task (requires auth)
+      description: |
+        Download audio from URL and prepare for transcription.
+        **Requires authentication and sufficient credits.**
+      operationId: createTask
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: Task created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '402':
+          description: Insufficient credits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsufficientCreditsError'
+
+  /tasks/{task_id}/transcribe:
+    post:
+      tags: [Transcription]
+      summary: Start transcription (deducts credits)
+      description: |
+        Start transcription for a downloaded task.
+        Deducts credits based on audio duration (1 credit/hour, rounded up).
+        **Requires authentication and sufficient credits.**
+      operationId: startTranscription
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: provider
+          in: query
+          schema:
+            type: string
+            enum: [whisper, tingwu]
+            default: whisper
+      responses:
+        '200':
+          description: Transcription started, credits deducted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TranscriptionStartedResponse'
+        '401':
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '402':
+          description: Insufficient credits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsufficientCreditsError'
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: JWT token stored in HTTPOnly cookie
+
+  schemas:
+    # ---- Auth Schemas ----
+    AuthRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        password:
+          type: string
+          minLength: 6
+          example: "password123"
+
+    AuthResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        credit_balance:
+          type: integer
+          example: 10
+
+    UserInfoResponse:
+      type: object
+      properties:
+        user_id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        credit_balance:
+          type: integer
+
+    # ---- Credits Schemas ----
+    BalanceResponse:
+      type: object
+      properties:
+        balance:
+          type: integer
+          example: 50
+
+    TransactionHistoryResponse:
+      type: object
+      properties:
+        transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditTransaction'
+        total:
+          type: integer
+          description: Total number of transactions
+
+    CreditTransaction:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum: [recharge, consumption, bonus, refund]
+        amount:
+          type: integer
+          description: Positive for additions, negative for deductions
+        balance_after:
+          type: integer
+        description:
+          type: string
+          example: "+50 充值"
+        created_at:
+          type: string
+          format: date-time
+
+    # ---- Payment Schemas ----
+    CreatePaymentRequest:
+      type: object
+      required: [amount]
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+          maximum: 500
+          example: 50
+          description: Payment amount in CNY
+        payment_method:
+          type: string
+          enum: [wxpay, alipay]
+          default: alipay
+
+    CreatePaymentResponse:
+      type: object
+      properties:
+        order_id:
+          type: string
+          format: uuid
+        payment_url:
+          type: string
+          format: uri
+          example: "https://zpayz.cn/submit.php?..."
+
+    WebhookPayload:
+      type: object
+      description: Z-Pay webhook callback payload (form data)
+      properties:
+        pid:
+          type: string
+        trade_no:
+          type: string
+        out_trade_no:
+          type: string
+        type:
+          type: string
+          enum: [alipay, wxpay]
+        name:
+          type: string
+        money:
+          type: string
+        trade_status:
+          type: string
+          enum: [TRADE_SUCCESS, TRADE_FAILED]
+        sign:
+          type: string
+        sign_type:
+          type: string
+          enum: [MD5]
+
+    PaymentOrderResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        amount:
+          type: integer
+        credits:
+          type: integer
+        status:
+          type: string
+          enum: [pending, paid, failed, expired]
+        payment_method:
+          type: string
+          enum: [wxpay, alipay]
+        created_at:
+          type: string
+          format: date-time
+        paid_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ---- Transcription Schemas ----
+    CreateTaskRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          example: "https://youtube.com/watch?v=..."
+
+    TaskResponse:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, downloading, downloaded, transcribing, completed, failed]
+        estimated_cost:
+          type: integer
+          description: Estimated credits needed (based on audio duration)
+
+    TranscriptionStartedResponse:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+          example: "transcribing"
+        credits_deducted:
+          type: integer
+        remaining_balance:
+          type: integer
+
+    # ---- Error Schemas ----
+    ErrorResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: "Not authenticated"
+
+    InsufficientCreditsError:
+      type: object
+      properties:
+        detail:
+          type: string
+          example: "积分不足"
+        required_credits:
+          type: integer
+        current_balance:
+          type: integer
+        credits_page_url:
+          type: string
+          example: "/static/credits.html"

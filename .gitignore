@@ -90,3 +90,6 @@ dmypy.json
 # Log files
 *.log
 logs/
+.specify/templates/tasks-template.md
+/.specify
+cookies.txt

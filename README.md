@@ -1,9 +1,12 @@
-# Podscript MVP
+# Podscript 
 
-一个用于播客/音视频链接的转写演示项目。提供任务创建、状态查询与结果下载（SRT/Markdown），采用模块化架构，便于独立开发与测试。
+一个用于播客/音视频链接的转写项目。提供任务创建、状态查询与结果下载（SRT/Markdown），采用模块化架构，便于独立开发与测试。
 
 ## 主要特性
 
+- **用户认证**：支持邮箱注册/登录，新用户赠送 10 积分
+- **积分系统**：1 元 = 1 积分，转写按时长扣费（1 积分/小时）
+- **在线支付**：集成 Z-Pay 支付网关，支持支付宝/微信支付
 - **下载与转写分离**：音频下载和语音转写为独立步骤，支持灵活组合
 - **双转写引擎**：支持 Whisper 离线转写和阿里云通义听悟在线转写
 - **多模型选择**：Whisper 提供 6 种模型，按需选择速度与精度
@@ -11,6 +14,7 @@
 - **说话人分离**：通义听悟支持自动识别不同发言人
 - **双云存储**：支持阿里云 OSS 和腾讯云 COS 两种对象存储
 - **实时进度**：转写过程实时显示进度和日志
+- **转写历史**：记录所有转写任务，支持分页查询和管理
 
 ## 快速开始
 
@@ -297,14 +301,45 @@ ARTIFACTS_DIR=artifacts
 > - 通义听悟 API 要求音频 URL 有效期至少 3 小时，COS 预签名 URL 已自动设置为 3 小时
 > - 不要将 `.env` 提交到 Git
 
+### 用户认证与支付（可选）
+
+如需启用用户注册、积分系统和在线支付功能：
+
+```env
+# Supabase 配置（用于用户认证和数据存储）
+SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+SUPABASE_ANON_KEY=eyJ...your_anon_key...
+SUPABASE_SERVICE_ROLE_KEY=eyJ...your_service_role_key...
+SUPABASE_JWT_SECRET=your-jwt-secret-from-settings
+
+# Z-Pay 支付配置
+ZPAY_PID=your_merchant_id
+ZPAY_KEY=your_secret_key
+ZPAY_NOTIFY_URL=https://your-domain.com/api/payment/webhook
+ZPAY_RETURN_URL=https://your-domain.com/static/payment-success.html
+```
+
+**配置步骤：**
+1. 创建 [Supabase](https://supabase.com) 项目
+2. 在 Supabase SQL Editor 中运行数据库迁移脚本
+3. 申请 Z-Pay 商户账号
+4. 配置 Webhook 回调地址
+
+详细配置请参考 [认证与支付技术文档](docs/auth-payment-technical.md)。
+
 ## 目录结构
 
 ```
 src/
 ├── podscript_api/          # API 网关与 Web UI
 │   ├── main.py             # FastAPI 应用入口
+│   ├── routers/            # API 路由模块
+│   │   └── auth.py         # 认证端点（注册/登录/登出）
+│   ├── middleware/         # 中间件
+│   │   └── auth.py         # JWT 认证中间件
 │   └── static/             # 前端静态文件
 │       ├── index.html      # 主页（任务创建）
+│       ├── login.html      # 登录/注册页
 │       ├── result.html     # 转写结果页
 │       └── *.css/*.js      # 样式与脚本
 ├── podscript_pipeline/     # 处理管线
@@ -318,11 +353,14 @@ src/
 │   └── formatters.py       # 结果格式化
 └── podscript_shared/       # 共享模型与配置
     ├── models.py           # Pydantic 模型
-    └── config.py           # 配置加载
+    ├── config.py           # 配置加载
+    ├── supabase.py         # Supabase 客户端
+    └── logging.py          # 支付日志
 
 tests/                      # 测试用例
 docs/                       # 文档
 specs/                      # 功能规格文档
+logs/                       # 支付日志目录
 ```
 
 ## 架构图

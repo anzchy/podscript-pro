@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>积分充值 - Podscript</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        /* Credits Page Specific Styles */
+        .credits-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: var(--space-8) var(--space-6);
+        }
+
+        .credits-header {
+            text-align: center;
+            margin-bottom: var(--space-8);
+        }
+
+        .credits-title {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--space-2);
+        }
+
+        .credits-subtitle {
+            color: var(--text-secondary);
+            font-size: 16px;
+        }
+
+        /* Balance Card */
+        .balance-card {
+            background: linear-gradient(135deg, var(--bg-dark), #2a2a29);
+            border-radius: var(--radius-xl);
+            padding: var(--space-8);
+            color: white;
+            text-align: center;
+            margin-bottom: var(--space-8);
+        }
+
+        .balance-label {
+            font-size: 14px;
+            opacity: 0.8;
+            margin-bottom: var(--space-2);
+        }
+
+        .balance-value {
+            font-size: 48px;
+            font-weight: 600;
+            margin-bottom: var(--space-1);
+        }
+
+        .balance-unit {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        /* Recharge Section */
+        .recharge-section {
+            background: white;
+            border-radius: var(--radius-xl);
+            padding: var(--space-8);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: var(--space-8);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: var(--space-6);
+        }
+
+        /* Preset Amounts */
+        .preset-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: var(--space-4);
+            margin-bottom: var(--space-6);
+        }
+
+        .preset-btn {
+            padding: var(--space-6) var(--space-4);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-lg);
+            background: white;
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-default);
+            text-align: center;
+        }
+
+        .preset-btn:hover {
+            border-color: var(--accent-orange);
+        }
+
+        .preset-btn.selected {
+            border-color: var(--accent-orange);
+            background: rgba(218, 119, 86, 0.05);
+        }
+
+        .preset-amount {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .preset-credits {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-top: var(--space-1);
+        }
+
+        /* Custom Amount */
+        .custom-amount {
+            margin-bottom: var(--space-6);
+        }
+
+        .custom-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-body);
+            margin-bottom: var(--space-2);
+            display: block;
+        }
+
+        .custom-input-wrapper {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+
+        .custom-input {
+            flex: 1;
+            padding: var(--space-3) var(--space-4);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-md);
+            font-size: 16px;
+            color: var(--text-body);
+        }
+
+        .custom-input:focus {
+            outline: none;
+            border-color: var(--accent-orange);
+            box-shadow: 0 0 0 3px rgba(218, 119, 86, 0.15);
+        }
+
+        .input-suffix {
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .custom-hint {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            margin-top: var(--space-2);
+        }
+
+        /* Payment Methods */
+        .payment-methods {
+            margin-bottom: var(--space-6);
+        }
+
+        .method-grid {
+            display: flex;
+            gap: var(--space-4);
+        }
+
+        .method-btn {
+            flex: 1;
+            padding: var(--space-4);
+            border: 2px solid var(--border);
+            border-radius: var(--radius-md);
+            background: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: var(--space-2);
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-body);
+            transition: all var(--duration-fast) var(--ease-default);
+        }
+
+        .method-btn:hover {
+            border-color: var(--accent-orange);
+        }
+
+        .method-btn.selected {
+            border-color: var(--accent-orange);
+            background: rgba(218, 119, 86, 0.05);
+        }
+
+        /* Pay Button */
+        .pay-btn {
+            width: 100%;
+            padding: var(--space-4);
+            border: none;
+            border-radius: var(--radius-md);
+            background: var(--bg-dark);
+            color: var(--text-inverse);
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all var(--duration-fast) var(--ease-default);
+        }
+
+        .pay-btn:hover {
+            background: #2a2a29;
+        }
+
+        .pay-btn:disabled {
+            background: var(--text-tertiary);
+            cursor: not-allowed;
+        }
+
+        /* Transaction History */
+        .history-section {
+            background: white;
+            border-radius: var(--radius-xl);
+            padding: var(--space-8);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+        }
+
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .history-table th,
+        .history-table td {
+            padding: var(--space-4);
+            text-align: left;
+            border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .history-table th {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+        }
+
+        .history-table td {
+            font-size: 14px;
+            color: var(--text-body);
+        }
+
+        .amount-positive {
+            color: var(--success);
+            font-weight: 500;
+        }
+
+        .amount-negative {
+            color: var(--error);
+            font-weight: 500;
+        }
+
+        .type-badge {
+            display: inline-block;
+            padding: var(--space-1) var(--space-2);
+            border-radius: var(--radius-sm);
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .type-bonus {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .type-recharge {
+            background: #dcfce7;
+            color: #15803d;
+        }
+
+        .type-consumption {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+
+        .empty-history {
+            text-align: center;
+            padding: var(--space-8);
+            color: var(--text-tertiary);
+        }
+
+        /* Error Message */
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: var(--error);
+            padding: var(--space-3) var(--space-4);
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            margin-bottom: var(--space-4);
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        /* Loading State */
+        .loading {
+            text-align: center;
+            padding: var(--space-8);
+            color: var(--text-tertiary);
+        }
+
+        @media (max-width: 640px) {
+            .preset-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .method-grid {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header class="header">
+        <div class="header-container">
+            <a href="/" class="logo">
+                <div class="logo-icon">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+                </div>
+                <span class="logo-text">Podscript</span>
+            </a>
+            <nav class="nav-links">
+                <a href="/" class="nav-link">首页</a>
+                <a href="/static/history.html" class="nav-link">历史记录</a>
+                <div id="userMenu" class="user-menu" hidden>
+                    <span class="nav-link credits-link active">
+                        <span id="userCredits">0</span> 积分
+                    </span>
+                    <button id="logoutBtn" class="nav-link logout-btn">退出</button>
+                </div>
+                <a id="loginLink" href="/login" class="nav-link login-link">登录</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="credits-container">
+        <div class="credits-header">
+            <h1 class="credits-title">积分充值</h1>
+            <p class="credits-subtitle">1 元 = 1 积分，转写按时长扣费（1 积分/小时）</p>
+        </div>
+
+        <!-- Balance Card -->
+        <div class="balance-card">
+            <div class="balance-label">当前积分余额</div>
+            <div class="balance-value" id="currentBalance">--</div>
+            <div class="balance-unit">积分</div>
+        </div>
+
+        <!-- Recharge Section -->
+        <div class="recharge-section">
+            <h2 class="section-title">选择充值金额</h2>
+
+            <div id="errorMessage" class="error-message"></div>
+
+            <!-- Preset Amounts -->
+            <div class="preset-grid">
+                <button class="preset-btn" data-amount="10">
+                    <div class="preset-amount">10 元</div>
+                    <div class="preset-credits">10 积分</div>
+                </button>
+                <button class="preset-btn selected" data-amount="50">
+                    <div class="preset-amount">50 元</div>
+                    <div class="preset-credits">50 积分</div>
+                </button>
+                <button class="preset-btn" data-amount="100">
+                    <div class="preset-amount">100 元</div>
+                    <div class="preset-credits">100 积分</div>
+                </button>
+            </div>
+
+            <!-- Custom Amount -->
+            <div class="custom-amount">
+                <label class="custom-label">自定义金额</label>
+                <div class="custom-input-wrapper">
+                    <input type="number" id="customAmount" class="custom-input"
+                           placeholder="输入金额" min="1" max="500">
+                    <span class="input-suffix">元 = <span id="customCredits">0</span> 积分</span>
+                </div>
+                <div class="custom-hint">金额范围：1 - 500 元</div>
+            </div>
+
+            <!-- Payment Methods -->
+            <div class="payment-methods">
+                <label class="custom-label">支付方式</label>
+                <div class="method-grid">
+                    <button class="method-btn selected" data-method="alipay">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M21.422 15.358c-3.156-1.597-5.126-2.61-5.904-3.04-.238.598-.573 1.255-.947 1.893 2.108 1.03 4.444 2.108 7.009 3.235.097-.672.157-1.379.157-2.113 0-.659-.034-1.318-.103-1.975h-.212zM12 2C6.478 2 2 6.478 2 12c0 5.523 4.478 10 10 10 5.523 0 10-4.477 10-10 0-5.522-4.477-10-10-10zm7.369 14.533c-2.75-1.178-5.242-2.312-7.475-3.4.487-.893.88-1.812 1.133-2.655h-3.15V9.422h3.726V8.578H9.877V6.844h2.104c-.168-.434-.394-.855-.62-1.262l2.16-.69c.283.488.558 1.116.778 1.727l-.434.225h3.262v1.734h-3.987v.844h3.353v1.056h-3.353c-.257.896-.694 1.935-1.252 2.901 1.808.87 3.815 1.776 6.031 2.72l.45-1.566z"/>
+                        </svg>
+                        支付宝
+                    </button>
+                    <button class="method-btn" data-method="wxpay">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8.691 2.188C3.891 2.188 0 5.476 0 9.53c0 2.212 1.17 4.203 3.002 5.55a.59.59 0 01.213.665l-.39 1.48c-.019.07-.048.141-.048.213 0 .163.13.295.29.295a.326.326 0 00.167-.054l1.903-1.114a.864.864 0 01.717-.098 10.16 10.16 0 002.837.403c.276 0 .543-.027.811-.05-.857-2.578.157-4.972 1.932-6.446 1.703-1.415 3.882-1.98 5.853-1.838-.576-3.583-4.196-6.348-8.596-6.348zM5.785 5.991c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 01-1.162 1.178A1.17 1.17 0 014.623 7.17c0-.651.52-1.18 1.162-1.18zm5.813 0c.642 0 1.162.529 1.162 1.18a1.17 1.17 0 01-1.162 1.178 1.17 1.17 0 01-1.162-1.178c0-.651.52-1.18 1.162-1.18zm3.164 4.682c-2.817 0-5.358 1.553-6.317 3.765-.959 2.214-.266 4.57 1.737 5.9.159.106.212.298.159.467l-.243.916c-.011.053-.034.107-.034.16a.219.219 0 00.22.222c.054 0 .108-.023.16-.046l1.432-.834c.149-.097.32-.108.48-.075.545.107 1.105.167 1.68.167 3.466 0 6.277-2.506 6.277-5.6 0-3.092-2.811-5.041-5.551-5.041zm-2.186 3.154c.484 0 .877.398.877.89a.884.884 0 01-.877.889.884.884 0 01-.877-.89c0-.49.393-.889.877-.889zm4.372 0c.484 0 .877.398.877.89a.884.884 0 01-.877.889.884.884 0 01-.877-.89c0-.49.393-.889.877-.889z"/>
+                        </svg>
+                        微信支付
+                    </button>
+                </div>
+            </div>
+
+            <!-- Pay Button -->
+            <button class="pay-btn" id="payBtn">立即支付 50 元</button>
+        </div>
+
+        <!-- Transaction History -->
+        <div class="history-section">
+            <h2 class="section-title">交易记录</h2>
+            <div id="historyLoading" class="loading">加载中...</div>
+            <div id="historyEmpty" class="empty-history" style="display: none;">暂无交易记录</div>
+            <table class="history-table" id="historyTable" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>时间</th>
+                        <th>类型</th>
+                        <th>金额</th>
+                        <th>说明</th>
+                    </tr>
+                </thead>
+                <tbody id="historyBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="/static/credits.js"></script>
+</body>
+</html>
